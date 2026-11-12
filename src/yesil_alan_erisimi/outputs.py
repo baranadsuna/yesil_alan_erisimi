@@ -1,0 +1,383 @@
+# -*- coding: utf-8 -*-
+"""
+Map Layer Generation & Visual Styling for Green Space Accessibility & Pedshed Analysis.
+Author / Developer: Baran Adsuna (https://github.com/baranadsuna)
+CRS Standard: EPSG:5253 (TUREF / TM30)
+Dual Compatible: QGIS 3 & QGIS 4 / Qt5 & Qt6
+"""
+from __future__ import annotations
+
+from typing import Any, Dict, List, Tuple
+
+from qgis.core import (
+    QgsCategorizedSymbolRenderer,
+    QgsCoordinateTransform,
+    QgsFeature,
+    QgsFillSymbol,
+    QgsGeometry,
+    QgsLineSymbol,
+    QgsMarkerSymbol,
+    QgsPointXY,
+    QgsRendererCategory,
+    QgsSingleSymbolRenderer,
+    QgsVectorLayer,
+)
+
+from . import i18n
+from .compat import make_field
+from .report import fmt_m
+
+# Color ramp from high walkability (dark green) to far / unreached (red/gray)
+RAMP = ["#15803d", "#65a30d", "#eab308", "#f97316", "#dc2626"]
+NO_ACCESS = "#4b5563"
+NO_SNAP = "#9ca3af"
+
+
+def threshold_colors(n: int) -> List[str]:
+    if n <= 1:
+        return [RAMP[0]]
+    return [RAMP[int(round(i * (len(RAMP) - 1) / float(n - 1)))] for i in range(n)]
+
+
+def class_labels(thresholds: List[float], lang: str = "en") -> Tuple[List[str], str, str]:
+    labels, prev = [], 0.0
+    for t in thresholds:
+        if prev == 0.0:
+            labels.append(f"0–{fmt_m(t)} m")
+        else:
+            labels.append(f"{fmt_m(prev)}–{fmt_m(t)} m")
+        prev = t
+
+    no_access_suffix = {
+        "en": f"> {fmt_m(thresholds[-1])} m (Unreached)",
+        "tr": f"> {fmt_m(thresholds[-1])} m (Erişim Dışı)",
+        "zh": f"> {fmt_m(thresholds[-1])} 米 (不可达)",
+        "es": f"> {fmt_m(thresholds[-1])} m (Sin acceso)",
+        "id": f"> {fmt_m(thresholds[-1])} m (Di luar jangkauan)",
+    }.get(lang, f"> {fmt_m(thresholds[-1])} m (Unreached)")
+
+    no_snap_str = {
+        "en": "Unsnapped to Road Network",
+        "tr": "Ağa Bağlanamadı",
+        "zh": "未吸附至路网",
+        "es": "No conectado a la red",
+        "id": "Tidak tersambung ke jalan",
+    }.get(lang, "Unsnapped to Road Network")
+
+    return labels, no_access_suffix, no_snap_str
+
+
+def _new_layer(geom_type: str, name: str, crs: Any, fields: List[Tuple[str, str]]) -> QgsVectorLayer:
+    lyr = QgsVectorLayer(geom_type, name, "memory")
+    lyr.setCrs(crs)
+    lyr.dataProvider().addAttributes([make_field(n, k) for n, k in fields])
+    lyr.updateFields()
+    return lyr
+
+
+def _fill(lyr: QgsVectorLayer, geoms_attrs: List[Tuple[QgsGeometry, List[Any]]], transform: Any) -> QgsVectorLayer:
+    feats = []
+    for geom, attrs in geoms_attrs:
+        if geom is None or geom.isNull() or geom.isEmpty():
+            continue
+        g_copy = QgsGeometry(geom)
+        if transform is not None:
+            try:
+                g_copy.transform(transform)
+            except Exception:
+                pass
+        f = QgsFeature(lyr.fields())
+        f.setGeometry(g_copy)
+        f.setAttributes(attrs)
+        feats.append(f)
+    if feats:
+        lyr.dataProvider().addFeatures(feats)
+    lyr.updateExtents()
+    return lyr
+
+
+def _multi(g: QgsGeometry) -> QgsGeometry:
+    if g is not None and not g.isNull() and not g.isMultipart():
+        g.convertToMultiType()
+    return g
+
+
+def _point(x: float, y: float) -> QgsGeometry:
+    return QgsGeometry.fromPointXY(QgsPointXY(x, y))
+
+
+def build_layers(
+    result: Dict[str, Any],
+    params: Dict[str, Any],
+    calc_crs: Any,
+    project: Any,
+    group_title: str,
+    lang: str = "en",
+) -> List[str]:
+    """Generates styled vector memory layers and adds them to the project."""
+    proj_crs = project.crs()
+    ct = None
+    if calc_crs.isValid() and proj_crs.isValid() and calc_crs != proj_crs:
+        ct = QgsCoordinateTransform(calc_crs, proj_crs, project)
+    out_crs = proj_crs if proj_crs.isValid() else calc_crs
+
+    ths = result["thresholds"]
+    colors = threshold_colors(len(ths))
+    root = project.layerTreeRoot()
+    group = root.insertGroup(0, group_title)
+    created = []
+
+    def add(layer: QgsVectorLayer) -> None:
+        project.addMapLayer(layer, False)
+        group.addLayer(layer)
+        created.append(layer.name())
+
+    # 1. Building Accessibility Results (Point Layer)
+    blds = result.get("buildings", [])
+    if blds:
+        use_w = bool(params.get("use_weight"))
+        fields = [
+            ("Bldg_ID", "int"),
+            ("Park_ID", "int"),
+            ("Dist_m", "double"),
+            ("Time_min", "double"),
+            ("Class", "string"),
+            ("Snap_m", "double"),
+        ]
+        for t in ths:
+            fields.append((f"Reach_{fmt_m(t)}m", "int"))
+        if use_w:
+            fields.append(("Weight", "double"))
+
+        layer_name = i18n.tr("layer_bldgs_name", lang)
+        lyr = _new_layer("Point", layer_name, out_crs, fields)
+        labels, none_lbl, nosnap_lbl = class_labels(ths, lang=lang)
+        spd = result["stats"].get("speed_mps") or (4.8 * 1000.0 / 3600.0)
+        rows = []
+
+        for bid, x, y, w, cost, lab, snap in blds:
+            if snap is None:
+                cls = nosnap_lbl
+            elif cost is None:
+                cls = none_lbl
+            else:
+                cls = none_lbl
+                for t, lbl in zip(ths, labels):
+                    if cost <= t:
+                        cls = lbl
+                        break
+            attrs = [
+                bid,
+                lab,
+                None if cost is None else round(cost, 1),
+                None if (cost is None or not spd) else round(cost / spd / 60.0, 1),
+                cls,
+                None if snap is None else round(snap, 1),
+            ]
+            attrs += [1 if (cost is not None and cost <= t) else 0 for t in ths]
+            if use_w:
+                attrs.append(w)
+            rows.append((_point(x, y), attrs))
+
+        _fill(lyr, rows, ct)
+
+        cats = []
+        for lbl, col in zip(labels, colors):
+            cats.append(
+                QgsRendererCategory(
+                    lbl,
+                    QgsMarkerSymbol.createSimple(
+                        {"name": "circle", "color": col, "size": "2.4", "outline_style": "no"}
+                    ),
+                    lbl,
+                )
+            )
+        cats.append(
+            QgsRendererCategory(
+                none_lbl,
+                QgsMarkerSymbol.createSimple(
+                    {"name": "circle", "color": NO_ACCESS, "size": "2.2", "outline_style": "no"}
+                ),
+                none_lbl,
+            )
+        )
+        cats.append(
+            QgsRendererCategory(
+                nosnap_lbl,
+                QgsMarkerSymbol.createSimple(
+                    {"name": "circle", "color": NO_SNAP, "size": "2.0", "outline_style": "no"}
+                ),
+                nosnap_lbl,
+            )
+        )
+        lyr.setRenderer(QgsCategorizedSymbolRenderer("Class", cats))
+        add(lyr)
+
+    # 2. Road Network Service Area Lines (Clipped at Thresholds)
+    for t, col in zip(ths, colors):
+        pcs = result.get("service", {}).get(t, [])
+        if pcs:
+            rows = [
+                (_multi(g), [rid, None if cost is None else round(cost, 1), lab])
+                for rid, g, cost, lab in pcs
+            ]
+            layer_name = i18n.tr("layer_roads_name", lang, t=fmt_m(t))
+            lyr = _new_layer(
+                "MultiLineString",
+                layer_name,
+                out_crs,
+                [("Road_ID", "int"), ("Dist_m", "double"), ("Park_ID", "int")],
+            )
+            _fill(lyr, rows, ct)
+            sym = QgsLineSymbol.createSimple(
+                {"line_color": col, "line_width": "1.7", "capstyle": "round", "joinstyle": "round"}
+            )
+            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
+            add(lyr)
+
+    # 3. Walkability Isochrone Catchment Polygons
+    if params.get("generate_polygons", True):
+        for t, col in zip(ths, colors):
+            if t in result.get("polygons", {}):
+                geom, area_m2 = result["polygons"][t]
+                layer_name = i18n.tr("layer_isochrones_name", lang, t=fmt_m(t))
+                lyr = _new_layer(
+                    "MultiPolygon",
+                    layer_name,
+                    out_crs,
+                    [("Threshold_m", "double"), ("Area_ha", "double")],
+                )
+                _fill(lyr, [(_multi(geom), [float(t), round(area_m2 / 10000.0, 2)])], ct)
+                sym = QgsFillSymbol.createSimple(
+                    {"color": col, "outline_color": col, "outline_width": "0.4"}
+                )
+                sym.setOpacity(0.35)
+                lyr.setRenderer(QgsSingleSymbolRenderer(sym))
+                add(lyr)
+
+    # 4. Benchmark Euclidean Circular Buffers (WHO / MPYY Baseline)
+    if params.get("generate_circles", True):
+        for t, col in zip(ths, colors):
+            if t in result.get("circles", {}):
+                geom, circ_m2 = result["circles"][t]
+                layer_name = i18n.tr("layer_circles_name", lang, t=fmt_m(t))
+                lyr = _new_layer(
+                    "MultiPolygon",
+                    layer_name,
+                    out_crs,
+                    [("Threshold_m", "double"), ("Area_ha", "double")],
+                )
+                _fill(lyr, [(_multi(geom), [float(t), round(circ_m2 / 10000.0, 2)])], ct)
+                sym = QgsFillSymbol.createSimple(
+                    {
+                        "color": "transparent",
+                        "outline_color": col,
+                        "outline_width": "0.6",
+                        "outline_style": "dash",
+                    }
+                )
+                lyr.setRenderer(QgsSingleSymbolRenderer(sym))
+                add(lyr)
+
+    # 5. Green Space Allocation & Pedshed Summary Layer
+    park_geoms = result.get("park_geoms", {})
+    allocations = result.get("allocations", {})
+    if park_geoms and allocations:
+        fields = [
+            ("Park_ID", "int"),
+            ("Area_ha", "double"),
+            ("Served_Bld", "int"),
+            ("Served_Pop", "double"),
+            ("Mean_Dist", "double"),
+            ("Status", "string"),
+        ]
+        layer_name = i18n.tr("layer_parks_summary_name", lang)
+        lyr = _new_layer("MultiPolygon", layer_name, out_crs, fields)
+        rows = []
+        for pid, data in allocations.items():
+            geom = park_geoms.get(pid)
+            if geom and not geom.isEmpty():
+                p_area_ha = round(data.get("area_m2", 0.0) / 10000.0, 2)
+                blds_cnt = data.get("buildings", 0)
+                mean_d = data.get("mean_dist")
+                status_str = (
+                    i18n.tr("status_well_connected", lang)
+                    if blds_cnt > 0
+                    else i18n.tr("status_isolated", lang)
+                )
+                rows.append((
+                    _multi(geom),
+                    [
+                        pid,
+                        p_area_ha,
+                        blds_cnt,
+                        round(data.get("weight", 0.0), 1),
+                        None if mean_d is None else round(mean_d, 1),
+                        status_str,
+                    ],
+                ))
+        if rows:
+            _fill(lyr, rows, ct)
+            sym = QgsFillSymbol.createSimple(
+                {"color": "#10b981", "outline_color": "#065f46", "outline_width": "0.5"}
+            )
+            sym.setOpacity(0.5)
+            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
+            add(lyr)
+
+    # 6. Audit & Debug Layers (Bridges & Access Points)
+    if params.get("add_debug", True):
+        if result.get("bridges"):
+            layer_name = i18n.tr("layer_bridges_name", lang)
+            lyr = _new_layer(
+                "LineString",
+                layer_name,
+                out_crs,
+                [("Length_m", "double"), ("Bridge_Type", "string")],
+            )
+            rows = [
+                (
+                    QgsGeometry.fromPolylineXY([QgsPointXY(x1, y1), QgsPointXY(x2, y2)]),
+                    [round(L, 2), "node-node" if kind == "node" else "T-junction"],
+                )
+                for x1, y1, x2, y2, L, kind in result["bridges"]
+            ]
+            _fill(lyr, rows, ct)
+            lyr.setRenderer(
+                QgsSingleSymbolRenderer(
+                    QgsLineSymbol.createSimple(
+                        {"line_color": "#3b82f6", "line_width": "1.3", "line_style": "dash"}
+                    )
+                )
+            )
+            add(lyr)
+
+        if result.get("access_points"):
+            layer_name = i18n.tr("layer_access_points_name", lang)
+            lyr = _new_layer(
+                "Point",
+                layer_name,
+                out_crs,
+                [("Park_ID", "int"), ("Snap_m", "double")],
+            )
+            rows = [
+                (_point(px, py), [pid, round(off, 1)])
+                for pid, px, py, off in result["access_points"]
+            ]
+            _fill(lyr, rows, ct)
+            lyr.setRenderer(
+                QgsSingleSymbolRenderer(
+                    QgsMarkerSymbol.createSimple(
+                        {
+                            "name": "diamond",
+                            "color": "#059669",
+                            "size": "3.0",
+                            "outline_color": "white",
+                            "outline_width": "0.4",
+                        }
+                    )
+                )
+            )
+            add(lyr)
+
+    return created
