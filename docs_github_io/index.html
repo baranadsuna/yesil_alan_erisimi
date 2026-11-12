@@ -202,11 +202,19 @@
     </section>
 
     <section>
-      <h2>4. User Guide &amp; Workflow</h2>
+      <h2>4. User Guide &amp; Dockable GUI Interface</h2>
       <div class="panel">
+        <p>
+          The plugin is built as a native <b>QgsDockWidget</b>, allowing urban planners to dock the analysis panel seamlessly to the
+          <b>Right</b> or <b>Left</b> of the QGIS canvas, tab it alongside the Layers panel, or float it across dual monitors.
+        </p>
+        <div style="text-align:center; margin: 1.5rem 0;">
+          <img src="assets/green_access_dock_gui.png" alt="Dockable GUI Panel" style="max-width: 440px; width: 100%; border-radius: 10px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5);" />
+          <p style="color:#94a3b8; font-size:0.85rem; margin-top:0.5rem;"><i>Figure 1: High-aesthetic dockable interface with emerald banner, 5-language selector, and responsive cards.</i></p>
+        </div>
         <ol>
-          <li><b>Load Layers:</b> Ensure layers are in projected metric coordinates (ideally <code>EPSG:5253</code>).</li>
-          <li><b>Select Language:</b> Use the header dropdown to toggle between English, Türkçe, 简体中文, Español, or Bahasa Indonesia.</li>
+          <li><b>Dock Anywhere:</b> Drag the dock widget header to attach to the left or right dock bar of QGIS, or double-click to float.</li>
+          <li><b>Select Language:</b> Use the header dropdown to toggle between English, Türkçe, 简体中文, Español, or Bahasa Indonesia in real time.</li>
           <li><b>Set Thresholds:</b> Enter comma-separated distance budgets (e.g. <code>300, 500, 1000</code> for urban parks, or <code>400, 800, 1200</code> for 5-10-15 min walks).</li>
           <li><b>Gap Healing:</b> Leave gap tolerance at 15 m to bridge digitized dead-end streets and T-junctions automatically.</li>
           <li><b>Execute:</b> Click <b>Start Analysis</b>. The background task executes safely without freezing QGIS.</li>

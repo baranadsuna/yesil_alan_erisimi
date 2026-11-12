@@ -13,7 +13,8 @@ from typing import Any, Optional
 from qgis.PyQt.QtGui import QIcon
 from qgis.PyQt.QtWidgets import QAction
 
-from .gui_dialog import GreenAccessDialog
+from .compat import dock_right
+from .gui_dialog import GreenAccessDockWidget
 
 MENU_TITLE = "&Green Space Analysis"
 
@@ -21,35 +22,55 @@ MENU_TITLE = "&Green Space Analysis"
 class GreenAccessPlugin:
     def __init__(self, iface: Any):
         self.iface = iface
-        self.plugin_dir = os.path.dirname(__file__)
+        self.plugin_dir = os.path.dirname(os.path.abspath(__file__))
         self.action: Optional[QAction] = None
-        self.dialog: Optional[GreenAccessDialog] = None
+        self.dock: Optional[GreenAccessDockWidget] = None
 
     def initGui(self) -> None:
         icon_path = os.path.join(self.plugin_dir, "icon.png")
         icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
         self.action = QAction(icon, "Green Space Accessibility Analysis", self.iface.mainWindow())
         self.action.setToolTip(
-            "Calculate network-based walking distance, isochrones, pedshed ratio, and facility load to urban green spaces"
+            "Toggle dockable green space walking distance, isochrones, pedshed ratio, and facility allocation panel"
         )
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(MENU_TITLE, self.action)
         self.iface.addToolBarIcon(self.action)
 
+        # Initialize dock widget and register to QGIS dock area
+        self.dock = GreenAccessDockWidget(self.iface)
+        self.dock.closingPlugin.connect(self._on_dock_closed)
+        self.iface.addDockWidget(dock_right(), self.dock)
+        self.dock.hide()
+
+    def _on_dock_closed(self) -> None:
+        if self.action:
+            self.action.setChecked(False)
+
     def unload(self) -> None:
-        if self.dialog is not None:
-            self.dialog.cancel_running()
-            self.dialog.close()
-            self.dialog.deleteLater()
-            self.dialog = None
+        if self.dock is not None:
+            self.dock.cancel_running()
+            self.iface.removeDockWidget(self.dock)
+            self.dock.deleteLater()
+            self.dock = None
         if self.action is not None:
             self.iface.removePluginMenu(MENU_TITLE, self.action)
             self.iface.removeToolBarIcon(self.action)
             self.action = None
 
     def run(self) -> None:
-        if self.dialog is None:
-            self.dialog = GreenAccessDialog(self.iface)
-        self.dialog.show()
-        self.dialog.raise_()
-        self.dialog.activateWindow()
+        if self.dock is None:
+            self.dock = GreenAccessDockWidget(self.iface)
+            self.dock.closingPlugin.connect(self._on_dock_closed)
+            self.iface.addDockWidget(dock_right(), self.dock)
+
+        if self.dock.isVisible():
+            self.dock.hide()
+            if self.action:
+                self.action.setChecked(False)
+        else:
+            self.dock.show()
+            self.dock.raise_()
+            self.dock.activateWindow()
+            if self.action:
+                self.action.setChecked(True)

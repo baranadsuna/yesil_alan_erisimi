@@ -81,3 +81,24 @@ def align_right():
         return Qt.AlignmentFlag.AlignRight
     except AttributeError:
         return Qt.AlignRight
+
+
+def dock_right():
+    try:
+        return Qt.DockWidgetArea.RightDockWidgetArea
+    except AttributeError:
+        return Qt.RightDockWidgetArea
+
+
+def dock_left():
+    try:
+        return Qt.DockWidgetArea.LeftDockWidgetArea
+    except AttributeError:
+        return Qt.LeftDockWidgetArea
+
+
+def dock_all_areas():
+    try:
+        return Qt.DockWidgetArea.AllDockWidgetAreas
+    except AttributeError:
+        return Qt.AllDockWidgetAreas

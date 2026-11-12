@@ -1,24 +1,33 @@
 # -*- coding: utf-8 -*-
 """
-Main GUI Dialog for Green Space Accessibility & Pedshed Analysis.
+Aesthetic, Responsive & Dockable GUI Panel for Green Space Accessibility & Pedshed Analysis.
 Author / Developer: Baran Adsuna (https://github.com/baranadsuna)
 CRS Standard: EPSG:5253 (TUREF / TM30)
 Dual Compatible: QGIS 3.22+ and QGIS 4.x (Qt5 & Qt6)
+
+Features:
+  - Dockable panel (QDockWidget) dockable to Left, Right, Floating, or Tabbed in QGIS.
+  - High-aesthetic card layout, emerald gradient banner, and responsive QScrollArea.
+  - Dynamic 5-language runtime switching (EN, TR, ZH, ES, ID).
+  - Quick-preset threshold pills and non-blocking background QgsTask execution.
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 from typing import Any, List, Optional
 
-from qgis.PyQt.QtCore import QSettings, Qt
+from qgis.PyQt.QtCore import QSettings, Qt, pyqtSignal
+from qgis.PyQt.QtGui import QIcon, QPixmap
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
-    QDialog,
+    QDockWidget,
     QDoubleSpinBox,
     QFileDialog,
     QFormLayout,
+    QFrame,
     QGroupBox,
     QHBoxLayout,
     QLabel,
@@ -26,6 +35,7 @@ from qgis.PyQt.QtWidgets import (
     QMessageBox,
     QProgressBar,
     QPushButton,
+    QScrollArea,
     QTabWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -36,7 +46,7 @@ from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 from . import i18n, report
 from .analysis_task import AnalysisTask, choose_calc_crs, log
-from .compat import align_right, layer_filter
+from .compat import align_right, dock_all_areas, layer_filter
 from .outputs import build_layers
 
 PLUGIN_VERSION = "5.1.0"
@@ -44,23 +54,176 @@ SETTINGS_PREFIX = "GreenSpaceAccessibility/"
 MAX_THRESHOLDS = 10
 
 STYLE = """
-QPushButton#runButton {
-    background-color: #10b981; color: white; font-weight: bold;
-    font-size: 13px; padding: 8px 16px; border-radius: 6px; border: none;
+QDockWidget {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    color: #1e293b;
+    font-size: 11.5px;
 }
-QPushButton#runButton:hover { background-color: #059669; }
-QPushButton#runButton:pressed { background-color: #047857; }
-QPushButton#runButton[running="true"] { background-color: #dc2626; }
-QPushButton#presetButton { padding: 3px 8px; font-size: 11px; }
-QProgressBar { border: 1px solid #cbd5e1; border-radius: 6px; text-align: center; height: 16px; font-size: 11px; }
-QProgressBar::chunk { background-color: #10b981; border-radius: 5px; }
-QLabel#statusHint { color: #64748b; font-size: 11px; }
-QComboBox#langSelector { font-weight: bold; padding: 2px 8px; border-radius: 4px; }
+QDockWidget::title {
+    text-align: left;
+    background: #064e3b;
+    color: #f8fafc;
+    padding: 6px 10px;
+    font-weight: 600;
+}
+QScrollArea {
+    border: none;
+    background-color: transparent;
+}
+QFrame#headerCard {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #022c22, stop:0.45 #064e3b, stop:1 #047857);
+    border: 1px solid #059669;
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin-bottom: 4px;
+}
+QLabel#appTitle {
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 13.5px;
+}
+QLabel#appSubtitle {
+    color: #a7f3d0;
+    font-size: 11px;
+}
+QLabel#badgePill {
+    background: rgba(16, 185, 129, 0.25);
+    border: 1px solid #34d399;
+    color: #d1fae5;
+    font-size: 9.5px;
+    font-weight: bold;
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+QLabel#crsPill {
+    background: rgba(56, 189, 248, 0.2);
+    border: 1px solid #38bdf8;
+    color: #e0f2fe;
+    font-size: 9.5px;
+    font-weight: bold;
+    padding: 2px 7px;
+    border-radius: 10px;
+}
+QComboBox#langSelector {
+    background: #ffffff;
+    border: 1px solid #6ee7b7;
+    border-radius: 12px;
+    padding: 2px 10px;
+    font-weight: bold;
+    color: #064e3b;
+    font-size: 11px;
+}
+QTabWidget::pane {
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    background: #ffffff;
+    padding: 4px;
+}
+QTabBar::tab {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-bottom: none;
+    border-top-left-radius: 6px;
+    border-top-right-radius: 6px;
+    padding: 6px 12px;
+    margin-right: 3px;
+    font-size: 11px;
+    color: #64748b;
+}
+QTabBar::tab:selected {
+    background: #ffffff;
+    border-bottom: 2px solid #10b981;
+    color: #047857;
+    font-weight: bold;
+}
+QGroupBox {
+    font-weight: bold;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    margin-top: 14px;
+    padding-top: 12px;
+    background-color: #fafbfc;
+}
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top left;
+    padding: 0 6px;
+    color: #0f172a;
+    font-size: 11.5px;
+}
+QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 4px 8px;
+    background: #ffffff;
+    min-height: 22px;
+    color: #0f172a;
+}
+QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {
+    border: 1.5px solid #10b981;
+    background: #ffffff;
+}
+QPushButton#presetButton {
+    background: #f8fafc;
+    border: 1px solid #cbd5e1;
+    border-radius: 11px;
+    padding: 3px 8px;
+    font-size: 10px;
+    color: #334155;
+}
+QPushButton#presetButton:hover {
+    background: #ecfdf5;
+    border-color: #10b981;
+    color: #047857;
+}
+QPushButton#runButton {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #059669);
+    color: #ffffff;
+    font-weight: bold;
+    font-size: 13px;
+    padding: 9px 18px;
+    border-radius: 8px;
+    border: none;
+}
+QPushButton#runButton:hover {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #059669, stop:1 #047857);
+}
+QPushButton#runButton[running="true"] {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ef4444, stop:1 #dc2626);
+}
+QPushButton#secondaryBtn {
+    background: #f1f5f9;
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    padding: 6px 12px;
+    font-size: 11px;
+    color: #334155;
+}
+QPushButton#secondaryBtn:hover {
+    background: #e2e8f0;
+    color: #0f172a;
+}
+QProgressBar {
+    border: 1px solid #cbd5e1;
+    border-radius: 6px;
+    text-align: center;
+    height: 14px;
+    font-size: 10px;
+    background: #f8fafc;
+}
+QProgressBar::chunk {
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34d399, stop:1 #10b981);
+    border-radius: 5px;
+}
+QLabel#statusHint {
+    color: #64748b;
+    font-size: 10.5px;
+}
 """
 
 
 def parse_thresholds(text: str) -> List[float]:
-    """Parses distance thresholds string: '300, 500; 1000' -> [300.0, 500.0, 1000.0]."""
+    """Parses comma/semicolon-separated distance thresholds string."""
     vals = set()
     cleaned = text.replace(";", " ").replace(",", " ")
     for tok in re.findall(r"\d+(?:\.\d+)*", cleaned):
@@ -80,39 +243,81 @@ def parse_thresholds(text: str) -> List[float]:
     return sorted_vals
 
 
-class GreenAccessDialog(QDialog):
-    """QGIS Dialog supporting 5-language runtime switching and non-blocking background analysis."""
+class GreenAccessDockWidget(QDockWidget):
+    """
+    Modern QGIS Dockable Panel for Green Space Accessibility & Pedshed Analysis.
+    Docks smoothly to the Left or Right of QGIS canvas, or floats independently.
+    """
+    closingPlugin = pyqtSignal()
 
     def __init__(self, iface: Any, parent: Optional[QWidget] = None):
-        super(GreenAccessDialog, self).__init__(parent or (iface.mainWindow() if iface else None))
+        super(GreenAccessDockWidget, self).__init__(parent or (iface.mainWindow() if iface else None))
         self.iface = iface
+        self.setObjectName("GreenAccessDockWidget")
+        self.setAllowedAreas(dock_all_areas())
+
         self._task: Optional[AnalysisTask] = None
         self._t_start = 0.0
         self._calc_crs = None
         self._crs_note = ""
         self._params: Optional[dict] = None
         self._current_lang = i18n.DEFAULT_LANGUAGE
+        self._plugin_dir = os.path.dirname(os.path.abspath(__file__))
 
         self._build_ui()
         self._load_settings()
         self._apply_translations()
 
-    def _tr(self, key: str, **kwargs) -> str:
-        return i18n.tr(key, lang=self._current_lang, **kwargs)
+    def _tr(self, key: str, *args, **kwargs) -> str:
+        return i18n.tr(key, self._current_lang, *args, **kwargs)
 
     # ==================================================================
-    # UI Setup
+    # UI Setup & Card Architecture
     # ==================================================================
     def _build_ui(self) -> None:
-        self.resize(580, 750)
         self.setStyleSheet(STYLE)
-        root = QVBoxLayout(self)
 
-        # Header with Language Selector
-        header_layout = QHBoxLayout()
-        self.lbl_title_box = QLabel()
-        self.lbl_title_box.setTextFormat(Qt.TextFormat.RichText if hasattr(Qt, "TextFormat") else Qt.RichText)
-        header_layout.addWidget(self.lbl_title_box, 1)
+        # Scroll area container for responsive narrow sidebar docking
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff if hasattr(Qt, "ScrollBarPolicy") else Qt.ScrollBarAlwaysOff
+        )
+
+        container = QWidget()
+        root = QVBoxLayout(container)
+        root.setContentsMargins(8, 8, 8, 8)
+        root.setSpacing(8)
+
+        # --- Header Card ---
+        self.header_card = QFrame()
+        self.header_card.setObjectName("headerCard")
+        h_lay = QVBoxLayout(self.header_card)
+        h_lay.setContentsMargins(6, 6, 6, 6)
+        h_lay.setSpacing(6)
+
+        top_row = QHBoxLayout()
+        # Plugin Icon
+        self.lbl_icon = QLabel()
+        icon_path = os.path.join(self._plugin_dir, "icon.png")
+        if os.path.exists(icon_path):
+            pix = QPixmap(icon_path).scaled(
+                36, 36,
+                Qt.AspectRatioMode.KeepAspectRatio if hasattr(Qt, "AspectRatioMode") else Qt.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation if hasattr(Qt, "TransformationMode") else Qt.SmoothTransformation
+            )
+            self.lbl_icon.setPixmap(pix)
+        top_row.addWidget(self.lbl_icon)
+
+        title_vbox = QVBoxLayout()
+        title_vbox.setSpacing(1)
+        self.lbl_app_title = QLabel("Green Space Accessibility")
+        self.lbl_app_title.setObjectName("appTitle")
+        self.lbl_app_subtitle = QLabel("Network Walkability & Pedshed Suite")
+        self.lbl_app_subtitle.setObjectName("appSubtitle")
+        title_vbox.addWidget(self.lbl_app_title)
+        title_vbox.addWidget(self.lbl_app_subtitle)
+        top_row.addLayout(title_vbox, 1)
 
         # Language dropdown
         self.cmb_lang = QComboBox()
@@ -120,52 +325,74 @@ class GreenAccessDialog(QDialog):
         for code, label in i18n.LANGUAGES.items():
             self.cmb_lang.addItem(label, code)
         self.cmb_lang.currentIndexChanged.connect(self._on_language_changed)
-        header_layout.addWidget(self.cmb_lang)
-        root.addLayout(header_layout)
+        top_row.addWidget(self.cmb_lang)
+        h_lay.addLayout(top_row)
 
-        # Main Tabs
+        # Badges row (Version + Mandatory CRS Standard)
+        badge_row = QHBoxLayout()
+        self.badge_ver = QLabel(f"v{PLUGIN_VERSION}")
+        self.badge_ver.setObjectName("badgePill")
+        self.badge_crs = QLabel("CRS: EPSG:5253")
+        self.badge_crs.setObjectName("crsPill")
+        badge_row.addWidget(self.badge_ver)
+        badge_row.addWidget(self.badge_crs)
+        badge_row.addStretch(1)
+        h_lay.addLayout(badge_row)
+
+        root.addWidget(self.header_card)
+
+        # --- Main Tabbed Panels ---
         self.tabs = QTabWidget()
+        self.tabs.setObjectName("modernTabs")
         root.addWidget(self.tabs, 1)
+
         self.tab_data = self._create_data_tab()
         self.tab_adv = self._create_advanced_tab()
         self.tab_rep = self._create_report_tab()
 
-        self.tabs.addTab(self.tab_data, "")
-        self.tabs.addTab(self.tab_adv, "")
-        self.tabs.addTab(self.tab_rep, "")
+        self.tabs.addTab(self.tab_data, "Data")
+        self.tabs.addTab(self.tab_adv, "Advanced")
+        self.tabs.addTab(self.tab_rep, "Report")
 
-        # Progress and status
+        # --- Progress Bar & Status Pill ---
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         root.addWidget(self.progress)
+
         self.lbl_status = QLabel("Ready")
         self.lbl_status.setObjectName("statusHint")
         root.addWidget(self.lbl_status)
 
-        # Bottom buttons
-        btn_layout = QHBoxLayout()
+        # --- Sticky Bottom Action Bar ---
+        action_row = QHBoxLayout()
         self.btn_about = QPushButton()
+        self.btn_about.setObjectName("secondaryBtn")
         self.btn_about.clicked.connect(self._on_about_clicked)
-        self.btn_close = QPushButton()
-        self.btn_close.clicked.connect(self.close)
 
         self.btn_run = QPushButton()
         self.btn_run.setObjectName("runButton")
         self.btn_run.setProperty("running", False)
         self.btn_run.clicked.connect(self._on_run_clicked)
 
-        btn_layout.addWidget(self.btn_about)
-        btn_layout.addStretch(1)
-        btn_layout.addWidget(self.btn_close)
-        btn_layout.addWidget(self.btn_run, 1)
-        root.addLayout(btn_layout)
+        action_row.addWidget(self.btn_about)
+        action_row.addStretch(1)
+        action_row.addWidget(self.btn_run, 2)
+        root.addLayout(action_row)
+
+        self.scroll_area.setWidget(container)
+        self.setWidget(self.scroll_area)
 
     def _create_data_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(8)
 
+        # Layer Selection Card
         self.grp_layers = QGroupBox()
         f = QFormLayout(self.grp_layers)
+        f.setContentsMargins(8, 12, 8, 8)
+        f.setSpacing(6)
 
         self.cmb_roads = QgsMapLayerComboBox()
         self.cmb_roads.setFilters(layer_filter("LineLayer"))
@@ -197,18 +424,23 @@ class GreenAccessDialog(QDialog):
         f.addRow(self.chk_selected)
         lay.addWidget(self.grp_layers)
 
+        # Distance Thresholds Card
         self.grp_thresholds = QGroupBox()
         v = QVBoxLayout(self.grp_thresholds)
+        v.setContentsMargins(8, 12, 8, 8)
+        v.setSpacing(6)
+
         self.txt_distances = QLineEdit("300, 500, 1000")
         v.addWidget(self.txt_distances)
 
         # Quick preset buttons (e.g. 500m, 300-500-1000, 400-800-1200 PlanX / PLN311 standard)
         pr = QHBoxLayout()
+        pr.setSpacing(4)
         for label, text in (
             ("500 m", "500"),
-            ("300 · 500 · 1000 m", "300, 500, 1000"),
-            ("400 · 800 · 1200 m (5-10-15 min)", "400, 800, 1200"),
-            ("250 · 500 · 750 · 1000 m", "250, 500, 750, 1000"),
+            ("300 · 500 · 1000", "300, 500, 1000"),
+            ("400 · 800 · 1200 (5-10-15m)", "400, 800, 1200"),
+            ("250 · 500 · 750 · 1000", "250, 500, 750, 1000"),
         ):
             b = QPushButton(label)
             b.setObjectName("presetButton")
@@ -219,10 +451,11 @@ class GreenAccessDialog(QDialog):
 
         self.lbl_thresholds_hint = QLabel()
         self.lbl_thresholds_hint.setObjectName("statusHint")
+        self.lbl_thresholds_hint.setWordWrap(True)
         v.addWidget(self.lbl_thresholds_hint)
         lay.addWidget(self.grp_thresholds)
-        lay.addStretch(1)
 
+        lay.addStretch(1)
         self._guess_layers()
         return w
 
@@ -239,10 +472,13 @@ class GreenAccessDialog(QDialog):
     def _create_advanced_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(8)
 
-        # Network Repair Group
+        # Network Gap Repair Card
         self.grp_repair = QGroupBox()
         f_rep = QFormLayout(self.grp_repair)
+        f_rep.setContentsMargins(8, 12, 8, 8)
         self.spn_gap = self._spin(0, 100, 15, 0, " m")
         self.chk_disc = QCheckBox()
         self.chk_disc.setChecked(True)
@@ -253,9 +489,10 @@ class GreenAccessDialog(QDialog):
         f_rep.addRow(self.chk_node)
         lay.addWidget(self.grp_repair)
 
-        # Park Entry & Snapping
+        # Park Access & Snapping Card
         self.grp_entry = QGroupBox()
         f_ent = QFormLayout(self.grp_entry)
+        f_ent.setContentsMargins(8, 12, 8, 8)
         self.cmb_origin = QComboBox()
         self.cmb_origin.addItem("Centroid", "centroid")
         self.cmb_origin.addItem("Entire boundary", "boundary")
@@ -273,9 +510,10 @@ class GreenAccessDialog(QDialog):
         f_ent.addRow(self.chk_offset)
         lay.addWidget(self.grp_entry)
 
-        # Outputs & Catchments
+        # Outputs & Catchments Card
         self.grp_outputs = QGroupBox()
         f_out = QFormLayout(self.grp_outputs)
+        f_out.setContentsMargins(8, 12, 8, 8)
         self.chk_poly = QCheckBox()
         self.chk_poly.setChecked(True)
         self.spn_buf = self._spin(1, 500, 25, 0, " m")
@@ -301,11 +539,15 @@ class GreenAccessDialog(QDialog):
     def _create_report_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
+        lay.setContentsMargins(6, 6, 6, 6)
+        lay.setSpacing(6)
+
         self.txt_report = QTextBrowser()
         self.txt_report.setOpenExternalLinks(True)
         lay.addWidget(self.txt_report, 1)
 
         self.btn_save_report = QPushButton()
+        self.btn_save_report.setObjectName("secondaryBtn")
         self.btn_save_report.clicked.connect(self._save_report)
         lay.addWidget(self.btn_save_report, 0, align_right())
         return w
@@ -316,32 +558,27 @@ class GreenAccessDialog(QDialog):
     def _on_language_changed(self, index: int) -> None:
         self._current_lang = self.cmb_lang.itemData(index)
         self._apply_translations()
-        # Re-render report if results exist
         if self._task is not None and self._task.result_data is not None:
             html = report.build_report_html(
                 self._task.result_data, self._params or {}, self._task.elapsed, self._crs_note, lang=self._current_lang
             )
             self.txt_report.setHtml(html)
-        elif not self.txt_report.toPlainText().strip():
+        elif not self.txt_report.toPlainText().strip() or "Henüz" in self.txt_report.toPlainText() or "No analysis" in self.txt_report.toPlainText():
             self.txt_report.setHtml(self._tr("no_report_yet"))
 
     def _apply_translations(self) -> None:
         _t = self._tr
         self.setWindowTitle(_t("plugin_title"))
-
-        title_html = (
-            f"<b style='font-size:15px;color:#0f172a'>{_t('plugin_title')}</b><br>"
-            f"<span style='color:#64748b;font-size:12px'>{_t('plugin_subtitle')}</span>"
-        )
-        self.lbl_title_box.setText(title_html)
+        self.lbl_app_title.setText(_t("plugin_title"))
+        self.lbl_app_subtitle.setText(_t("plugin_subtitle"))
 
         # Tabs
-        self.tabs.setTabText(0, _t("tab_data"))
-        self.tabs.setTabText(1, _t("tab_advanced"))
-        self.tabs.setTabText(2, _t("tab_report"))
+        self.tabs.setTabText(0, f"📊 {_t('tab_data')}")
+        self.tabs.setTabText(1, f"⚙️ {_t('tab_advanced')}")
+        self.tabs.setTabText(2, f"📑 {_t('tab_report')}")
 
         # Data Tab
-        self.grp_layers.setTitle(_t("layers_group"))
+        self.grp_layers.setTitle(f"🗺️ {_t('layers_group')}")
         self.lbl_roads.setText(_t("roads_layer"))
         self.lbl_parks.setText(_t("parks_layer"))
         self.lbl_buildings.setText(_t("buildings_layer"))
@@ -349,11 +586,11 @@ class GreenAccessDialog(QDialog):
         self.cmb_weight.setToolTip(_t("weight_field_tip"))
         self.chk_selected.setText(_t("use_selected"))
 
-        self.grp_thresholds.setTitle(_t("thresholds_group"))
+        self.grp_thresholds.setTitle(f"🚶 {_t('thresholds_group')}")
         self.lbl_thresholds_hint.setText(_t("thresholds_tip"))
 
         # Advanced Tab
-        self.grp_repair.setTitle(_t("network_repair_group"))
+        self.grp_repair.setTitle(f"🔧 {_t('network_repair_group')}")
         self.lbl_gap.setText(_t("gap_tolerance"))
         self.spn_gap.setToolTip(_t("gap_tolerance_tip"))
         self.chk_disc.setText(_t("only_disconnected"))
@@ -361,7 +598,7 @@ class GreenAccessDialog(QDialog):
         self.chk_node.setText(_t("node_crossings"))
         self.chk_node.setToolTip(_t("node_crossings_tip"))
 
-        self.grp_entry.setTitle(_t("park_entry_group"))
+        self.grp_entry.setTitle(f"🌳 {_t('park_entry_group')}")
         self.lbl_entry_mode.setText(_t("entry_mode"))
         cur_origin = self.cmb_origin.currentData()
         self.cmb_origin.clear()
@@ -376,7 +613,7 @@ class GreenAccessDialog(QDialog):
         self.spn_area.setToolTip(_t("min_park_area_tip"))
         self.chk_offset.setText(_t("include_snap_offset"))
 
-        self.grp_outputs.setTitle(_t("outputs_group"))
+        self.grp_outputs.setTitle(f"📐 {_t('outputs_group')}")
         self.chk_poly.setText(_t("generate_polygons"))
         self.lbl_buf.setText(_t("polygon_buffer"))
         self.spn_buf.setToolTip(_t("polygon_buffer_tip"))
@@ -385,19 +622,18 @@ class GreenAccessDialog(QDialog):
         self.lbl_speed.setText(_t("walking_speed"))
 
         # Buttons & Status
-        self.btn_about.setText(_t("btn_about"))
-        self.btn_close.setText(_t("btn_close"))
-        self.btn_save_report.setText(_t("btn_save_report"))
+        self.btn_about.setText(f"ℹ️ {_t('btn_about')}")
+        self.btn_save_report.setText(f"💾 {_t('btn_save_report')}")
         is_running = self.btn_run.property("running")
-        self.btn_run.setText(_t("btn_cancel") if is_running else _t("btn_run"))
+        self.btn_run.setText(_t("btn_cancel") if is_running else f"▶ {_t('btn_run')}")
         if not is_running:
-            self.lbl_status.setText(_t("status_ready"))
+            self.lbl_status.setText(f"🟢 {_t('status_ready')}")
 
-        if not self.txt_report.toPlainText().strip() or "Henüz analiz" in self.txt_report.toPlainText():
+        if not self.txt_report.toPlainText().strip() or "Henüz" in self.txt_report.toPlainText():
             self.txt_report.setHtml(_t("no_report_yet"))
 
     # ==================================================================
-    # Settings & Layer Helpers
+    # Layer Auto-Detection & QSettings
     # ==================================================================
     def _guess_layers(self) -> None:
         hints = (
@@ -495,7 +731,7 @@ class GreenAccessDialog(QDialog):
             self._warn(f"Failed to save report:\n{exc}")
 
     def _set_running(self, running: bool) -> None:
-        self.btn_run.setText(self._tr("btn_cancel") if running else self._tr("btn_run"))
+        self.btn_run.setText(self._tr("btn_cancel") if running else f"▶ {self._tr('btn_run')}")
         self.btn_run.setProperty("running", running)
         self.btn_run.style().unpolish(self.btn_run)
         self.btn_run.style().polish(self.btn_run)
@@ -511,7 +747,7 @@ class GreenAccessDialog(QDialog):
     # ==================================================================
     def _on_run_clicked(self) -> None:
         if self._task is not None:
-            self.lbl_status.setText(self._tr("status_cancelling"))
+            self.lbl_status.setText(f"⏳ {self._tr('status_cancelling')}")
             self._task.cancel()
             return
         self._start()
@@ -575,7 +811,7 @@ class GreenAccessDialog(QDialog):
         self._task.finished_signal.connect(self._on_finished)
         self._t_start = time.time()
         self.progress.setValue(0)
-        self.lbl_status.setText(self._tr("status_running"))
+        self.lbl_status.setText(f"⏳ {self._tr('status_running')}")
         self._set_running(True)
         QgsApplication.taskManager().addTask(self._task)
 
@@ -588,7 +824,7 @@ class GreenAccessDialog(QDialog):
 
         if ok and task.result_data is not None:
             try:
-                self.lbl_status.setText(self._tr("status_generating_layers"))
+                self.lbl_status.setText(f"📦 {self._tr('status_generating_layers')}")
                 QgsApplication.processEvents()
                 group_title = f"{self._tr('plugin_title')} – {time.strftime('%H:%M:%S')}"
                 build_layers(
@@ -609,7 +845,7 @@ class GreenAccessDialog(QDialog):
                 self.txt_report.setHtml(html)
                 self.tabs.setCurrentIndex(2)
                 self.progress.setValue(100)
-                self.lbl_status.setText(self._tr("status_completed", task.elapsed))
+                self.lbl_status.setText(f"✅ {self._tr('status_completed', task.elapsed)}")
                 if self.iface:
                     self.iface.messageBar().pushSuccess(
                         self._tr("plugin_title"),
@@ -618,14 +854,14 @@ class GreenAccessDialog(QDialog):
             except Exception as exc:
                 import traceback
                 log(traceback.format_exc())
-                self.lbl_status.setText(self._tr("status_error"))
+                self.lbl_status.setText(f"❌ {self._tr('status_error')}")
                 self._warn(f"Error creating map layers:\n{exc}")
         elif task.isCanceled():
             self.progress.setValue(0)
-            self.lbl_status.setText(self._tr("status_cancelled"))
+            self.lbl_status.setText(f"⚠️ {self._tr('status_cancelled')}")
         else:
             self.progress.setValue(0)
-            self.lbl_status.setText(self._tr("status_error"))
+            self.lbl_status.setText(f"❌ {self._tr('status_error')}")
             if task.error:
                 log(task.error)
                 last_line = task.error.strip().splitlines()[-1]
@@ -634,4 +870,9 @@ class GreenAccessDialog(QDialog):
                 self._warn(self._tr("status_error"))
 
     def closeEvent(self, event: Any) -> None:
-        super(GreenAccessDialog, self).closeEvent(event)
+        self.closingPlugin.emit()
+        event.accept()
+
+
+# Compatibility alias for legacy imports
+GreenAccessDialog = GreenAccessDockWidget
