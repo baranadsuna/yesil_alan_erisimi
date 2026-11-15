@@ -104,6 +104,7 @@ class AnalysisTask(QgsTask):
         self.elapsed: float = 0.0
         self.skipped_small_parks: int = 0
         self._park_geoms: Dict[Any, QgsGeometry] = {}
+        self._bldg_geoms: Dict[Any, QgsGeometry] = {}
 
     def _tr(self, key: str, **kwargs) -> str:
         return i18n.tr(key, self.lang, **kwargs)
@@ -139,7 +140,7 @@ class AnalysisTask(QgsTask):
 
     def _read_parks(self) -> List[Dict[str, Any]]:
         parks = []
-        boundary = self.params.get("origin_mode") == "boundary"
+        boundary = self.params.get("origin_mode", "boundary") == "boundary"
         min_area = float(self.params.get("min_area", 0.0))
 
         for k, feat in enumerate(self._request(self.inputs["parks"])):
@@ -149,13 +150,13 @@ class AnalysisTask(QgsTask):
             if geom is None or geom.isNull() or geom.isEmpty():
                 continue
             p_area = float(geom.area()) if geom.isGeosValid() else 0.0
-            if min_area > 0 and p_area < min_area:
+            if min_area > 0 and p_area > 0 and p_area < min_area:
                 self.skipped_small_parks += 1
                 continue
 
             c = geom.centroid()
             try:
-                if not geom.contains(c):
+                if p_area > 0 and not geom.contains(c):
                     c = geom.pointOnSurface()
             except Exception:
                 pass
@@ -164,13 +165,15 @@ class AnalysisTask(QgsTask):
             pt = c.asPoint()
 
             ring = []
-            if boundary:
+            if boundary and p_area > 0:
                 dg = geom
                 try:
-                    dg = geom.densifyByDistance(25.0)
+                    dg = geom.densifyByDistance(5.0)
                 except Exception:
                     pass
                 ring = [(v.x(), v.y()) for v in dg.vertices()]
+            else:
+                ring = [(v.x(), v.y()) for v in geom.vertices()] or [(pt.x(), pt.y())]
 
             self._park_geoms[feat.id()] = QgsGeometry(geom)
             parks.append({
@@ -181,7 +184,7 @@ class AnalysisTask(QgsTask):
             })
         return parks
 
-    def _read_buildings(self) -> List[Tuple[Any, float, float, float]]:
+    def _read_buildings(self) -> List[Tuple[Any, float, float, float, List[Tuple[float, float]]]]:
         inp = self.inputs.get("buildings")
         if not inp:
             return []
@@ -194,9 +197,29 @@ class AnalysisTask(QgsTask):
             if geom is None or geom.isNull() or geom.isEmpty():
                 continue
             c = geom.centroid()
+            try:
+                if geom.area() > 0 and not geom.contains(c):
+                    c = geom.pointOnSurface()
+            except Exception:
+                pass
             if c is None or c.isNull() or c.isEmpty():
                 continue
             pt = c.asPoint()
+
+            # Extract dense facade points along the block/building perimeter
+            facade_pts: List[Tuple[float, float]] = []
+            try:
+                if geom.area() > 0:
+                    self._bldg_geoms[feat.id()] = QgsGeometry(geom)
+                    dg = geom.densifyByDistance(5.0)
+                    facade_pts = [(v.x(), v.y()) for v in dg.vertices()]
+                else:
+                    facade_pts = [(v.x(), v.y()) for v in geom.vertices()]
+            except Exception:
+                facade_pts = [(pt.x(), pt.y())]
+            if not facade_pts:
+                facade_pts = [(pt.x(), pt.y())]
+
             w = 1.0
             if field:
                 try:
@@ -207,7 +230,7 @@ class AnalysisTask(QgsTask):
                             w = 0.0
                 except Exception:
                     w = 0.0
-            out.append((feat.id(), pt.x(), pt.y(), w))
+            out.append((feat.id(), pt.x(), pt.y(), w, facade_pts))
         return out
 
     def run(self) -> bool:
@@ -221,7 +244,7 @@ class AnalysisTask(QgsTask):
 
             parks = self._read_parks()
             if not parks:
-                raise ValueError("No usable green space polygons found passing the area threshold.")
+                raise ValueError("No usable facility features found passing the filter.")
             self.setProgress(7)
 
             buildings = self._read_buildings()
@@ -247,6 +270,7 @@ class AnalysisTask(QgsTask):
             self._build_geometries(res)
             res["skipped_small_parks"] = self.skipped_small_parks
             res["park_geoms"] = self._park_geoms
+            res["bldg_geoms"] = self._bldg_geoms
             self.result_data = res
             self.setProgress(98)
             return True
@@ -269,13 +293,16 @@ class AnalysisTask(QgsTask):
         make_poly = bool(self.params.get("generate_polygons", True))
         make_circ = bool(self.params.get("generate_circles", True))
 
-        # Collect all park seeds for Euclidean benchmark circular buffers
+        # Collect all facility seeds and polygon geometries
         all_park_centroids = []
+        facility_polys = []
         for pid, geom in self._park_geoms.items():
             if geom and not geom.isEmpty():
                 c = geom.centroid()
                 if c and not c.isEmpty():
                     all_park_centroids.append(c.asPoint())
+                if geom.area() > 0:
+                    facility_polys.append(geom.buffer(max(buf * 0.5, 5.0), 6))
 
         for t, pcs in res["pieces"].items():
             if self.isCanceled():
@@ -298,10 +325,21 @@ class AnalysisTask(QgsTask):
             # Isochrone Catchment Polygon
             net_area_m2 = 0.0
             if make_poly and flat:
-                # Merge service line network and buffer corridor
                 merged_lines = QgsGeometry.collectGeometry(flat)
-                poly = merged_lines.buffer(buf, 6)
+                poly = merged_lines.buffer(buf, 8)
                 if poly and not poly.isEmpty():
+                    if facility_polys:
+                        try:
+                            poly = QgsGeometry.unaryUnion([poly] + facility_polys)
+                        except Exception:
+                            pass
+                    try:
+                        if hasattr(poly, "removeInteriorRings"):
+                            cleaned = poly.removeInteriorRings(18000.0)
+                            if cleaned and not cleaned.isEmpty():
+                                poly = cleaned
+                    except Exception:
+                        pass
                     net_area_m2 = float(poly.area())
                     polygons[t] = (poly, net_area_m2)
 

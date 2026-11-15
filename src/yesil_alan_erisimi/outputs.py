@@ -27,9 +27,9 @@ from . import i18n
 from .compat import make_field
 from .report import fmt_m
 
-# Color ramp from high walkability (dark green) to far / unreached (red/gray)
-RAMP = ["#15803d", "#65a30d", "#eab308", "#f97316", "#dc2626"]
-NO_ACCESS = "#4b5563"
+# Color ramp from high walkability (vibrant green) to far / unreached (red/gray)
+RAMP = ["#16a34a", "#65a30d", "#eab308", "#f97316", "#dc2626"]
+NO_ACCESS = "#dc2626"
 NO_SNAP = "#9ca3af"
 
 
@@ -132,13 +132,14 @@ def build_layers(
         group.addLayer(layer)
         created.append(layer.name())
 
-    # 1. Building Accessibility Results (Point Layer)
+    # 1. Building / Block Accessibility Results (Points + Colored Polygons)
     blds = result.get("buildings", [])
+    bldg_geoms = result.get("bldg_geoms", {})
     if blds:
         use_w = bool(params.get("use_weight"))
         fields = [
             ("Bldg_ID", "int"),
-            ("Park_ID", "int"),
+            ("Target_ID", "int"),
             ("Dist_m", "double"),
             ("Time_min", "double"),
             ("Class", "string"),
@@ -154,6 +155,7 @@ def build_layers(
         labels, none_lbl, nosnap_lbl = class_labels(ths, lang=lang)
         spd = result["stats"].get("speed_mps") or (4.8 * 1000.0 / 3600.0)
         rows = []
+        poly_rows = []
 
         for bid, x, y, w, cost, lab, snap in blds:
             if snap is None:
@@ -178,6 +180,10 @@ def build_layers(
             if use_w:
                 attrs.append(w)
             rows.append((_point(x, y), attrs))
+            if bid in bldg_geoms:
+                bg = bldg_geoms[bid]
+                if bg is not None and not bg.isEmpty():
+                    poly_rows.append((_multi(QgsGeometry(bg)), list(attrs)))
 
         _fill(lyr, rows, ct)
 
@@ -187,7 +193,13 @@ def build_layers(
                 QgsRendererCategory(
                     lbl,
                     QgsMarkerSymbol.createSimple(
-                        {"name": "circle", "color": col, "size": "2.4", "outline_style": "no"}
+                        {
+                            "name": "circle",
+                            "color": col,
+                            "size": "2.6",
+                            "outline_color": "#ffffff",
+                            "outline_width": "0.3",
+                        }
                     ),
                     lbl,
                 )
@@ -196,7 +208,7 @@ def build_layers(
             QgsRendererCategory(
                 none_lbl,
                 QgsMarkerSymbol.createSimple(
-                    {"name": "circle", "color": NO_ACCESS, "size": "2.2", "outline_style": "no"}
+                    {"name": "circle", "color": NO_ACCESS, "size": "2.4", "outline_style": "no"}
                 ),
                 none_lbl,
             )
@@ -213,6 +225,31 @@ def build_layers(
         lyr.setRenderer(QgsCategorizedSymbolRenderer("Class", cats))
         add(lyr)
 
+        # Colored Building / Block Polygon Layer (so blocks within 250m are painted green!)
+        if poly_rows:
+            poly_layer_name = i18n.tr("layer_bldgs_poly_name", lang)
+            poly_lyr = _new_layer("MultiPolygon", poly_layer_name, out_crs, fields)
+            _fill(poly_lyr, poly_rows, ct)
+            poly_cats = []
+            for lbl, col in zip(labels, colors):
+                sym = QgsFillSymbol.createSimple(
+                    {"color": col, "outline_color": "#1e293b", "outline_width": "0.25"}
+                )
+                sym.setOpacity(0.62)
+                poly_cats.append(QgsRendererCategory(lbl, sym, lbl))
+            sym_none = QgsFillSymbol.createSimple(
+                {"color": NO_ACCESS, "outline_color": "#1e293b", "outline_width": "0.25"}
+            )
+            sym_none.setOpacity(0.45)
+            poly_cats.append(QgsRendererCategory(none_lbl, sym_none, none_lbl))
+            sym_nosnap = QgsFillSymbol.createSimple(
+                {"color": NO_SNAP, "outline_color": "#475569", "outline_width": "0.25"}
+            )
+            sym_nosnap.setOpacity(0.35)
+            poly_cats.append(QgsRendererCategory(nosnap_lbl, sym_nosnap, nosnap_lbl))
+            poly_lyr.setRenderer(QgsCategorizedSymbolRenderer("Class", poly_cats))
+            add(poly_lyr)
+
     # 2. Road Network Service Area Lines (Clipped at Thresholds)
     for t, col in zip(ths, colors):
         pcs = result.get("service", {}).get(t, [])
@@ -221,12 +258,12 @@ def build_layers(
                 (_multi(g), [rid, None if cost is None else round(cost, 1), lab])
                 for rid, g, cost, lab in pcs
             ]
-            layer_name = i18n.tr("layer_roads_name", lang, t=fmt_m(t))
+            layer_name = i18n.tr("layer_roads_name", lang, fmt_m(t))
             lyr = _new_layer(
                 "MultiLineString",
                 layer_name,
                 out_crs,
-                [("Road_ID", "int"), ("Dist_m", "double"), ("Park_ID", "int")],
+                [("Road_ID", "int"), ("Dist_m", "double"), ("Target_ID", "int")],
             )
             _fill(lyr, rows, ct)
             sym = QgsLineSymbol.createSimple(
@@ -235,23 +272,34 @@ def build_layers(
             lyr.setRenderer(QgsSingleSymbolRenderer(sym))
             add(lyr)
 
-    # 3. Walkability Isochrone Catchment Polygons
+    # 3. Walkability Isochrone Catchment Polygons (Non-overlapping clean bands)
     if params.get("generate_polygons", True):
+        prev_iso_geom = None
         for t, col in zip(ths, colors):
             if t in result.get("polygons", {}):
                 geom, area_m2 = result["polygons"][t]
-                layer_name = i18n.tr("layer_isochrones_name", lang, t=fmt_m(t))
+                disp_geom = QgsGeometry(geom)
+                if prev_iso_geom is not None:
+                    try:
+                        diff = disp_geom.difference(prev_iso_geom)
+                        if diff is not None and not diff.isEmpty():
+                            disp_geom = diff
+                    except Exception:
+                        pass
+                prev_iso_geom = QgsGeometry(geom)
+
+                layer_name = i18n.tr("layer_isochrones_name", lang, fmt_m(t))
                 lyr = _new_layer(
                     "MultiPolygon",
                     layer_name,
                     out_crs,
                     [("Threshold_m", "double"), ("Area_ha", "double")],
                 )
-                _fill(lyr, [(_multi(geom), [float(t), round(area_m2 / 10000.0, 2)])], ct)
+                _fill(lyr, [(_multi(disp_geom), [float(t), round(area_m2 / 10000.0, 2)])], ct)
                 sym = QgsFillSymbol.createSimple(
                     {"color": col, "outline_color": col, "outline_width": "0.4"}
                 )
-                sym.setOpacity(0.35)
+                sym.setOpacity(0.38)
                 lyr.setRenderer(QgsSingleSymbolRenderer(sym))
                 add(lyr)
 
@@ -260,7 +308,7 @@ def build_layers(
         for t, col in zip(ths, colors):
             if t in result.get("circles", {}):
                 geom, circ_m2 = result["circles"][t]
-                layer_name = i18n.tr("layer_circles_name", lang, t=fmt_m(t))
+                layer_name = i18n.tr("layer_circles_name", lang, fmt_m(t))
                 lyr = _new_layer(
                     "MultiPolygon",
                     layer_name,
@@ -279,12 +327,12 @@ def build_layers(
                 lyr.setRenderer(QgsSingleSymbolRenderer(sym))
                 add(lyr)
 
-    # 5. Green Space Allocation & Pedshed Summary Layer
+    # 5. Facility Allocation & Pedshed Summary Layer
     park_geoms = result.get("park_geoms", {})
     allocations = result.get("allocations", {})
     if park_geoms and allocations:
         fields = [
-            ("Park_ID", "int"),
+            ("Target_ID", "int"),
             ("Area_ha", "double"),
             ("Served_Bld", "int"),
             ("Served_Pop", "double"),
@@ -292,8 +340,8 @@ def build_layers(
             ("Status", "string"),
         ]
         layer_name = i18n.tr("layer_parks_summary_name", lang)
-        lyr = _new_layer("MultiPolygon", layer_name, out_crs, fields)
-        rows = []
+        poly_rows = []
+        pt_rows = []
         for pid, data in allocations.items():
             geom = park_geoms.get(pid)
             if geom and not geom.isEmpty():
@@ -305,28 +353,74 @@ def build_layers(
                     if blds_cnt > 0
                     else i18n.tr("status_isolated", lang)
                 )
-                rows.append((
-                    _multi(geom),
-                    [
-                        pid,
-                        p_area_ha,
-                        blds_cnt,
-                        round(data.get("weight", 0.0), 1),
-                        None if mean_d is None else round(mean_d, 1),
-                        status_str,
-                    ],
-                ))
-        if rows:
-            _fill(lyr, rows, ct)
+                row_attrs = [
+                    pid,
+                    p_area_ha,
+                    blds_cnt,
+                    round(data.get("weight", 0.0), 1),
+                    None if mean_d is None else round(mean_d, 1),
+                    status_str,
+                ]
+                if geom.area() > 0:
+                    poly_rows.append((_multi(QgsGeometry(geom)), row_attrs))
+                else:
+                    c = geom.centroid()
+                    if c and not c.isEmpty():
+                        pt = c.asPoint()
+                        pt_rows.append((_point(pt.x(), pt.y()), row_attrs))
+
+        if poly_rows:
+            lyr = _new_layer("MultiPolygon", layer_name, out_crs, fields)
+            _fill(lyr, poly_rows, ct)
             sym = QgsFillSymbol.createSimple(
-                {"color": "#10b981", "outline_color": "#065f46", "outline_width": "0.5"}
+                {"color": "#ea580c", "outline_color": "#7c2d12", "outline_width": "0.6"}
             )
-            sym.setOpacity(0.5)
+            sym.setOpacity(0.55)
+            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
+            add(lyr)
+        elif pt_rows:
+            lyr = _new_layer("Point", layer_name, out_crs, fields)
+            _fill(lyr, pt_rows, ct)
+            sym = QgsMarkerSymbol.createSimple(
+                {
+                    "name": "star",
+                    "color": "#ea580c",
+                    "size": "4.5",
+                    "outline_color": "#ffffff",
+                    "outline_width": "0.5",
+                }
+            )
             lyr.setRenderer(QgsSingleSymbolRenderer(sym))
             add(lyr)
 
-    # 6. Audit & Debug Layers (Bridges & Access Points)
+    # 6. Audit & Debug Layers (Facade Connectors, Bridges & Access Points)
     if params.get("add_debug", True):
+        if result.get("building_connectors"):
+            conn_rows = []
+            for bid, _cx, _cy, fx, fy, qx, qy, cost, lab, snap_d in result["building_connectors"]:
+                if snap_d is not None and snap_d > 0.05:
+                    conn_rows.append((
+                        QgsGeometry.fromPolylineXY([QgsPointXY(fx, fy), QgsPointXY(qx, qy)]),
+                        [bid, lab, None if cost is None else round(cost, 1), round(snap_d, 1)],
+                    ))
+            if conn_rows:
+                layer_name = i18n.tr("layer_connectors_name", lang)
+                lyr = _new_layer(
+                    "LineString",
+                    layer_name,
+                    out_crs,
+                    [("Bldg_ID", "int"), ("Target_ID", "int"), ("Dist_m", "double"), ("Snap_m", "double")],
+                )
+                _fill(lyr, conn_rows, ct)
+                lyr.setRenderer(
+                    QgsSingleSymbolRenderer(
+                        QgsLineSymbol.createSimple(
+                            {"line_color": "#c2410c", "line_width": "0.7", "line_style": "dot"}
+                        )
+                    )
+                )
+                add(lyr)
+
         if result.get("bridges"):
             layer_name = i18n.tr("layer_bridges_name", lang)
             lyr = _new_layer(
@@ -346,7 +440,7 @@ def build_layers(
             lyr.setRenderer(
                 QgsSingleSymbolRenderer(
                     QgsLineSymbol.createSimple(
-                        {"line_color": "#3b82f6", "line_width": "1.3", "line_style": "dash"}
+                        {"line_color": "#d97706", "line_width": "1.3", "line_style": "dash"}
                     )
                 )
             )
@@ -358,7 +452,7 @@ def build_layers(
                 "Point",
                 layer_name,
                 out_crs,
-                [("Park_ID", "int"), ("Snap_m", "double")],
+                [("Target_ID", "int"), ("Snap_m", "double")],
             )
             rows = [
                 (_point(px, py), [pid, round(off, 1)])
@@ -370,7 +464,7 @@ def build_layers(
                     QgsMarkerSymbol.createSimple(
                         {
                             "name": "diamond",
-                            "color": "#059669",
+                            "color": "#ea580c",
                             "size": "3.0",
                             "outline_color": "white",
                             "outline_width": "0.4",

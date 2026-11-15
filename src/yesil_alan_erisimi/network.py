@@ -404,6 +404,29 @@ class RoadNetwork:
             return None
         return best
 
+    def edges_within_distance(
+        self, x: float, y: float, max_dist: float
+    ) -> List[Tuple[int, float, float, float, float]]:
+        """Finds all edges within max_dist -> [(edge_id, t, qx, qy, dist), ...]."""
+        cs = self.cs
+        cx, cy = self._cell(x, y)
+        max_r = int(max_dist // cs) + 1
+        out: List[Tuple[int, float, float, float, float]] = []
+        seen = set()
+        for ix in range(-max_r, max_r + 1):
+            for iy in range(-max_r, max_r + 1):
+                for e in self._egrid.get((cx + ix, cy + iy), ()):
+                    if e in seen:
+                        continue
+                    seen.add(e)
+                    u, v = self.eu[e], self.ev[e]
+                    t, qx, qy, dd = _project_point_to_segment(
+                        x, y, self.nx[u], self.ny[u], self.nx[v], self.ny[v]
+                    )
+                    if dd <= max_dist:
+                        out.append((e, t, qx, qy, dd))
+        return out
+
     def add_source_point(self, x: float, y: float, max_snap: float) -> Optional[Tuple[int, float, float, float]]:
         """Connects point to network by splitting nearest edge -> (node_id, snap_dist, px, py)."""
         ne = self.nearest_edge(x, y, max_snap)
@@ -412,6 +435,68 @@ class RoadNetwork:
         e, _t, qx, qy, dd = ne
         node = self.split_edge(e, qx, qy)
         return node, dd, self.nx[node], self.ny[node]
+
+    def add_facility_sources(
+        self,
+        seeds: List[Tuple[float, float]],
+        max_snap: float,
+        multi_street: bool = True,
+    ) -> List[Tuple[int, float, float, float]]:
+        """
+        Connects a target facility (school, park, station, etc.) to the road network.
+        When multi_street=True, in addition to the nearest road for each boundary seed,
+        it also connects to all bounding streets around the facility block within frontage
+        tolerance so streets on all sides of the facility receive direct access.
+        Returns: [(node_id, snap_dist, px, py), ...]
+        """
+        if not seeds:
+            return []
+
+        # 1. Find nearest edge for each seed
+        nearest_per_seed = []
+        min_dd = INF
+        for sx, sy in seeds:
+            ne = self.nearest_edge(sx, sy, max_snap)
+            if ne is not None:
+                nearest_per_seed.append((sx, sy, ne))
+                if ne[4] < min_dd:
+                    min_dd = ne[4]
+
+        if not nearest_per_seed:
+            return []
+
+        snap_targets: List[Tuple[float, float, float]] = []  # (qx, qy, dd)
+        for _sx, _sy, (_e, _t, qx, qy, dd) in nearest_per_seed:
+            snap_targets.append((qx, qy, dd))
+
+        # 2. Also collect surrounding streets within block-frontage tolerance (up to 35m)
+        if multi_street and min_dd < INF:
+            frontage_tol = min(max_snap, max(min_dd + 25.0, min_dd * 3.0, 35.0))
+            best_by_road: Dict[Any, Tuple[float, float, float]] = {}
+            for sx, sy in seeds:
+                for e, _t, qx, qy, dd in self.edges_within_distance(sx, sy, frontage_tol):
+                    road_key = self.eroad[e] if self.eroad[e] is not None else f"bridge_{e}"
+                    prev = best_by_road.get(road_key)
+                    if prev is None or dd < prev[2]:
+                        best_by_road[road_key] = (qx, qy, dd)
+            for qx, qy, dd in best_by_road.values():
+                snap_targets.append((qx, qy, dd))
+
+        # Deduplicate snap targets within 2.0m and split edges
+        results: List[Tuple[int, float, float, float]] = []
+        placed_pts: List[Tuple[float, float]] = []
+        for qx, qy, dd in sorted(snap_targets, key=lambda item: item[2]):
+            if any(math.hypot(qx - px, qy - py) < 2.0 for px, py in placed_pts):
+                continue
+            ne = self.nearest_edge(qx, qy, max(5.0, dd + 1.0))
+            if ne is None:
+                continue
+            e_now, _t_now, qx_now, qy_now, _d_now = ne
+            node = self.split_edge(e_now, qx_now, qy_now)
+            placed_pts.append((self.nx[node], self.ny[node]))
+            results.append((node, dd, self.nx[node], self.ny[node]))
+
+        return results
 
     def dijkstra(
         self, sources: List[Tuple[int, float, Any]], cutoff: float
@@ -510,8 +595,8 @@ class RoadNetwork:
         include_offset: bool = True,
     ) -> Tuple[Optional[float], Optional[Any], Optional[float]]:
         """
-        Evaluates point (e.g. building centroid) for shortest network distance to green space.
-        Returns: (cost, nearest_park_id, snap_dist)
+        Evaluates point (e.g. building centroid) for shortest network distance to facility.
+        Returns: (cost, nearest_facility_id, snap_dist)
         """
         ne = self.nearest_edge(x, y, max_snap)
         if ne is None:
@@ -531,6 +616,115 @@ class RoadNetwork:
         if include_offset:
             cost += dd
         return cost, lab, dd
+
+    def _edge_cost_at(
+        self, e: int, t: float, dist: Dict[int, float], label: Dict[int, Any]
+    ) -> Tuple[Optional[float], Optional[Any]]:
+        u, v = self.eu[e], self.ev[e]
+        L = self.el[e]
+        cand = []
+        cu, cv = dist.get(u), dist.get(v)
+        if cu is not None:
+            cand.append((cu + t * L, label[u]))
+        if cv is not None:
+            cand.append((cv + (1.0 - t) * L, label[v]))
+        if not cand:
+            return None, None
+        return min(cand)
+
+    def evaluate_building(
+        self,
+        cx: float,
+        cy: float,
+        facade_pts: Optional[List[Tuple[float, float]]],
+        dist: Dict[int, float],
+        label: Dict[int, Any],
+        max_snap: float,
+        include_offset: bool = False,
+        bldg_mode: str = "facade",
+    ) -> Tuple[Optional[float], Optional[Any], Optional[float], float, float, float, float]:
+        """
+        Evaluates a residential block or building using its road-facing facades (cepheler).
+        Finds the facade exit point (fx, fy) and fronting road projection (qx, qy)
+        that gives the shortest network path to the target facility (e.g. school/park),
+        treating the block as if its origin were at that closest-to-facility road facade.
+        Returns: (cost, nearest_facility_id, snap_dist, fx, fy, qx, qy)
+        """
+        if bldg_mode == "centroid" or not facade_pts:
+            ne = self.nearest_edge(cx, cy, max_snap)
+            if ne is None:
+                return None, None, None, cx, cy, cx, cy
+            e, t, qx, qy, dd = ne
+            rcost, lab = self._edge_cost_at(e, t, dist, label)
+            if rcost is None:
+                return None, None, dd, cx, cy, qx, qy
+            cost = (rcost + dd) if include_offset else rcost
+            return cost, lab, dd, cx, cy, qx, qy
+
+        pts = _thin(facade_pts, 4.0)
+        if not pts:
+            pts = [(cx, cy)]
+
+        # 1. Inspect nearest road for each facade point around the perimeter
+        perim_snaps: List[Tuple[float, float, int, float, float, float, float]] = []
+        min_dd = INF
+        for fx, fy in pts:
+            ne = self.nearest_edge(fx, fy, max_snap)
+            if ne is not None:
+                e, t, qx, qy, dd = ne
+                perim_snaps.append((fx, fy, e, t, qx, qy, dd))
+                if dd < min_dd:
+                    min_dd = dd
+
+        if not perim_snaps:
+            return None, None, None, cx, cy, cx, cy
+
+        # 2. Street-frontage band: all facades facing bounding roads around this block
+        frontage_tol = min(max_snap, max(min_dd + 25.0, min_dd * 3.0, 32.0))
+
+        best_key = None
+        best_res = None
+
+        # Check all candidate edges within frontage_tol of each facade point
+        for fx, fy, e0, t0, qx0, qy0, dd0 in perim_snaps:
+            if dd0 > frontage_tol:
+                continue
+            cand_edges = [(e0, t0, qx0, qy0, dd0)]
+            for ce in self.edges_within_distance(fx, fy, frontage_tol):
+                if ce[0] != e0:
+                    cand_edges.append(ce)
+            for e, t, qx, qy, dd in cand_edges:
+                rcost, lab = self._edge_cost_at(e, t, dist, label)
+                if rcost is None:
+                    continue
+                total_cost = (rcost + dd) if include_offset else rcost
+                # Prioritize shortest network distance to facility, break ties by closest facade-to-road perpendicular distance
+                key = (round(total_cost, 2), round(dd, 3))
+                if best_key is None or key < best_key:
+                    best_key = key
+                    best_res = (total_cost, lab, dd, fx, fy, qx, qy)
+
+        if best_res is not None:
+            return best_res
+
+        # 3. Fallback: if no road in frontage_tol was reached, check any facade snap up to max_snap
+        for fx, fy, e, t, qx, qy, dd in perim_snaps:
+            rcost, lab = self._edge_cost_at(e, t, dist, label)
+            if rcost is None:
+                continue
+            total_cost = (rcost + dd) if include_offset else rcost
+            key = (round(total_cost, 2), round(dd, 3))
+            if best_key is None or key < best_key:
+                best_key = key
+                best_res = (total_cost, lab, dd, fx, fy, qx, qy)
+
+        if best_res is not None:
+            return best_res
+
+        # Snapped to an isolated road segment not reached by any facility
+        closest = min(perim_snaps, key=lambda item: item[6])
+        fx, fy, _e, _t, qx, qy, dd = closest
+        return None, None, dd, fx, fy, qx, qy
 
 
 # ----------------------------------------------------------------------
@@ -552,7 +746,7 @@ def _thin(points: List[Tuple[float, float]], min_gap: float) -> List[Tuple[float
 def analyze(
     roads: List[Tuple[Any, List[Tuple[float, float]]]],
     parks: List[Dict[str, Any]],
-    buildings: List[Tuple[Any, float, float, float]],
+    buildings: List[Any],
     params: Dict[str, Any],
     progress: Optional[Callable[[float], None]] = None,
     status: Optional[Callable[[str], None]] = None,
@@ -567,7 +761,8 @@ def analyze(
     thresholds = sorted(set(params["thresholds"]))
     max_t = thresholds[-1]
     max_snap = float(params.get("max_snap", 200.0))
-    include_offset = bool(params.get("include_offset", True))
+    include_offset = bool(params.get("include_offset", False))
+    bldg_mode = str(params.get("bldg_mode", "facade"))
     gap_tol = float(params.get("gap_tol", 15.0))
     stats: Dict[str, Any] = {}
 
@@ -575,14 +770,14 @@ def analyze(
     net = RoadNetwork(cell_size=cell, cancelled=cancelled)
 
     status("status_building_graph")
-    net.add_lines(roads, node_crossings=bool(params.get("node_crossings", False)))
+    net.add_lines(roads, node_crossings=bool(params.get("node_crossings", True)))
     stats["segments"] = net.segment_count
     stats["nodes"] = len(net.nx)
     stats["components_before"] = net.component_count()
     progress(30)
 
     status("status_healing_gaps")
-    n_node, n_seg = net.heal_gaps(gap_tol, bool(params.get("only_disconnected", True)))
+    n_node, n_seg = net.heal_gaps(gap_tol, bool(params.get("only_disconnected", False)))
     stats["bridges_node"] = n_node
     stats["bridges_segment"] = n_seg
     stats["components_after"] = net.component_count()
@@ -592,26 +787,24 @@ def analyze(
     sources = []
     access_points = []
     unsnapped_parks = []
-    mode = params.get("origin_mode", "centroid")
+    mode = params.get("origin_mode", "boundary")
 
     for k, park in enumerate(parks):
         if k % 200 == 0 and cancelled is not None and cancelled():
             raise Cancelled()
         if mode == "boundary" and park.get("ring"):
-            seeds = _thin(park["ring"], 15.0)
+            seeds = _thin(park["ring"], 5.0)
+            multi_street = True
         else:
             seeds = [park["centroid"]]
-        attached = False
-        for sx, sy in seeds:
-            res = net.add_source_point(sx, sy, max_snap)
-            if res is None:
-                continue
-            node, off, px, py = res
+            multi_street = bool(park.get("ring"))
+        snapped_nodes = net.add_facility_sources(seeds, max_snap, multi_street=multi_street)
+        if not snapped_nodes:
+            unsnapped_parks.append(park["id"])
+            continue
+        for node, off, px, py in snapped_nodes:
             sources.append((node, off if include_offset else 0.0, park["id"]))
             access_points.append((park["id"], px, py, off))
-            attached = True
-        if not attached:
-            unsnapped_parks.append(park["id"])
 
     stats["parks_total"] = len(parks)
     stats["parks_unsnapped"] = len(unsnapped_parks)
@@ -620,8 +813,9 @@ def analyze(
     progress(60)
 
     status("status_dijkstra")
-    dist, label = net.dijkstra(sources, max_t)
-    stats["nodes_reached"] = len(dist)
+    max_edge_len = max(net.el) if net.el else 0.0
+    dist, label = net.dijkstra(sources, max_t + max_edge_len + 50.0)
+    stats["nodes_reached"] = sum(1 for d in dist.values() if d <= max_t)
     progress(75)
 
     status("status_clipping_pieces")
@@ -631,16 +825,25 @@ def analyze(
     status("status_eval_buildings")
     speed_mps = float(params.get("speed_kmh", 4.8)) * 1000.0 / 3600.0
     b_out = []
+    b_connectors = []
     unsnapped_b = unreached_b = 0
     park_alloc: Dict[Any, Dict[str, Any]] = {
         p["id"]: {"buildings": 0, "weight": 0.0, "distances": [], "area_m2": p.get("area_m2", 0.0)}
         for p in parks
     }
 
-    for k, (bid, bx, by, w) in enumerate(buildings):
+    for k, b_item in enumerate(buildings):
         if k % 2000 == 0 and cancelled is not None and cancelled():
             raise Cancelled()
-        cost, lab, snap_d = net.evaluate_point(bx, by, dist, label, max_snap, include_offset)
+        if len(b_item) >= 5:
+            bid, bx, by, w, facade_pts = b_item[0], b_item[1], b_item[2], b_item[3], b_item[4]
+        else:
+            bid, bx, by, w = b_item[0], b_item[1], b_item[2], b_item[3]
+            facade_pts = None
+
+        cost, lab, snap_d, fx, fy, qx, qy = net.evaluate_building(
+            bx, by, facade_pts, dist, label, max_snap, include_offset, bldg_mode=bldg_mode
+        )
         if snap_d is None:
             unsnapped_b += 1
         elif cost is None or cost > max_t:
@@ -654,6 +857,7 @@ def analyze(
                 park_alloc[lab]["distances"].append(cost)
 
         b_out.append((bid, bx, by, w, cost, lab, snap_d))
+        b_connectors.append((bid, bx, by, fx, fy, qx, qy, cost, lab, snap_d))
 
     stats["buildings_total"] = len(buildings)
     stats["buildings_unsnapped"] = unsnapped_b
@@ -700,6 +904,7 @@ def analyze(
         "access_points": access_points,
         "unsnapped_parks": unsnapped_parks,
         "buildings": b_out,
+        "building_connectors": b_connectors,
         "allocations": allocations_summary,
         "stats": stats,
     }

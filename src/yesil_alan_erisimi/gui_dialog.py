@@ -1,15 +1,17 @@
 # -*- coding: utf-8 -*-
 """
-Aesthetic, Responsive & Dockable GUI Panel for Green Space Accessibility & Pedshed Analysis.
+Simple, Aesthetic & Smoothly Dockable GUI Panel for Accessibility Analysis (Erişim Analizi).
 Author / Developer: Baran Adsuna (https://github.com/baranadsuna)
 CRS Standard: EPSG:5253 (TUREF / TM30)
 Dual Compatible: QGIS 3.22+ and QGIS 4.x (Qt5 & Qt6)
 
-Features:
-  - Dockable panel (QDockWidget) dockable to Left, Right, Floating, or Tabbed in QGIS.
-  - High-aesthetic card layout, emerald gradient banner, and responsive QScrollArea.
-  - Dynamic 5-language runtime switching (EN, TR, ZH, ES, ID).
-  - Quick-preset threshold pills and non-blocking background QgsTask execution.
+Key Features:
+  - Reduced 18px outer-edge snap threshold + one-click [⬅ Left | 🪟 Float | Right ➡] buttons
+    so the panel never snaps accidentally while moving across the screen.
+  - Warm Terracotta & Amber-Bronze architectural theme (non-blue, ultra-clean & simple).
+  - Universal facility support (Schools, Parks, Health, Transit, etc. — Point or Polygon).
+  - Closest road-facing facade connection for residential blocks/buildings.
+  - Dynamic 5-language runtime switching (TR, EN, ZH, ES, ID).
 """
 from __future__ import annotations
 
@@ -19,7 +21,7 @@ import time
 from typing import Any, List, Optional
 
 from qgis.PyQt.QtCore import QSettings, Qt, pyqtSignal
-from qgis.PyQt.QtGui import QIcon, QPixmap
+from qgis.PyQt.QtGui import QCursor, QPixmap
 from qgis.PyQt.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -36,6 +38,7 @@ from qgis.PyQt.QtWidgets import (
     QProgressBar,
     QPushButton,
     QScrollArea,
+    QSizePolicy,
     QTabWidget,
     QTextBrowser,
     QVBoxLayout,
@@ -46,24 +49,25 @@ from qgis.gui import QgsFieldComboBox, QgsMapLayerComboBox
 
 from . import i18n, report
 from .analysis_task import AnalysisTask, choose_calc_crs, log
-from .compat import align_right, dock_all_areas, layer_filter
+from .compat import align_right, dock_left, dock_left_right, dock_none, dock_right, layer_filter
 from .outputs import build_layers
 
-PLUGIN_VERSION = "5.1.0"
-SETTINGS_PREFIX = "GreenSpaceAccessibility/"
+PLUGIN_VERSION = "5.2.0"
+SETTINGS_PREFIX = "UrbanAccessibilityAnalysis_v52/"
 MAX_THRESHOLDS = 10
+SNAP_EDGE_MARGIN_PX = 18  # Only snap when dragged within 18px of extreme outer left/right edge
 
 STYLE = """
-QDockWidget {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    color: #1e293b;
-    font-size: 11.5px;
+QDockWidget, QWidget {
+    font-family: "Segoe UI", Arial, sans-serif;
+    color: #1c1917;
+    font-size: 11px;
 }
 QDockWidget::title {
     text-align: left;
-    background: #064e3b;
-    color: #f8fafc;
-    padding: 6px 10px;
+    background: #7c2d12;
+    color: #fafaf9;
+    padding: 5px 10px;
     font-weight: 600;
 }
 QScrollArea {
@@ -71,152 +75,166 @@ QScrollArea {
     background-color: transparent;
 }
 QFrame#headerCard {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #022c22, stop:0.45 #064e3b, stop:1 #047857);
-    border: 1px solid #059669;
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #431407, stop:0.5 #7c2d12, stop:1 #c2410c);
+    border: 1px solid #ea580c;
     border-radius: 10px;
-    padding: 10px 12px;
-    margin-bottom: 4px;
+    padding: 8px 10px;
+    margin-bottom: 2px;
 }
 QLabel#appTitle {
     color: #ffffff;
     font-weight: bold;
-    font-size: 13.5px;
+    font-size: 14px;
 }
 QLabel#appSubtitle {
-    color: #a7f3d0;
-    font-size: 11px;
+    color: #fed7aa;
+    font-size: 10.5px;
 }
 QLabel#badgePill {
-    background: rgba(16, 185, 129, 0.25);
-    border: 1px solid #34d399;
-    color: #d1fae5;
+    background: rgba(251, 146, 60, 0.25);
+    border: 1px solid #fb923c;
+    color: #ffedd5;
     font-size: 9.5px;
     font-weight: bold;
     padding: 2px 7px;
-    border-radius: 10px;
+    border-radius: 9px;
 }
 QLabel#crsPill {
-    background: rgba(56, 189, 248, 0.2);
-    border: 1px solid #38bdf8;
-    color: #e0f2fe;
+    background: rgba(245, 158, 11, 0.22);
+    border: 1px solid #fbbf24;
+    color: #fef3c7;
     font-size: 9.5px;
     font-weight: bold;
     padding: 2px 7px;
-    border-radius: 10px;
+    border-radius: 9px;
+}
+QPushButton#dockBtn {
+    background: rgba(255, 255, 255, 0.14);
+    border: 1px solid rgba(254, 215, 170, 0.45);
+    border-radius: 6px;
+    color: #fff7ed;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+}
+QPushButton#dockBtn:hover {
+    background: rgba(251, 146, 60, 0.45);
+    border-color: #fdba74;
+    color: #ffffff;
 }
 QComboBox#langSelector {
-    background: #ffffff;
-    border: 1px solid #6ee7b7;
-    border-radius: 12px;
-    padding: 2px 10px;
+    background: #fff7ed;
+    border: 1px solid #fdba74;
+    border-radius: 10px;
+    padding: 2px 8px;
     font-weight: bold;
-    color: #064e3b;
-    font-size: 11px;
+    color: #7c2d12;
+    font-size: 10.5px;
 }
 QTabWidget::pane {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #e7e5e4;
     border-radius: 8px;
     background: #ffffff;
     padding: 4px;
 }
 QTabBar::tab {
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
+    background: #f5f5f4;
+    border: 1px solid #e7e5e4;
     border-bottom: none;
     border-top-left-radius: 6px;
     border-top-right-radius: 6px;
-    padding: 6px 12px;
+    padding: 5px 12px;
     margin-right: 3px;
     font-size: 11px;
-    color: #64748b;
+    color: #57534e;
 }
 QTabBar::tab:selected {
     background: #ffffff;
-    border-bottom: 2px solid #10b981;
-    color: #047857;
+    border-bottom: 2px solid #ea580c;
+    color: #9a3412;
     font-weight: bold;
 }
 QGroupBox {
     font-weight: bold;
-    border: 1px solid #e2e8f0;
+    border: 1px solid #e7e5e4;
     border-radius: 8px;
-    margin-top: 14px;
-    padding-top: 12px;
-    background-color: #fafbfc;
+    margin-top: 12px;
+    padding-top: 10px;
+    background-color: #fafaf9;
 }
 QGroupBox::title {
     subcontrol-origin: margin;
     subcontrol-position: top left;
     padding: 0 6px;
-    color: #0f172a;
-    font-size: 11.5px;
+    color: #292524;
+    font-size: 11px;
 }
 QLineEdit, QComboBox, QDoubleSpinBox, QSpinBox {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d6d3d1;
     border-radius: 6px;
-    padding: 4px 8px;
+    padding: 4px 7px;
     background: #ffffff;
-    min-height: 22px;
-    color: #0f172a;
+    min-height: 21px;
+    color: #1c1917;
 }
 QLineEdit:focus, QComboBox:focus, QDoubleSpinBox:focus {
-    border: 1.5px solid #10b981;
+    border: 1.5px solid #ea580c;
     background: #ffffff;
 }
 QPushButton#presetButton {
-    background: #f8fafc;
-    border: 1px solid #cbd5e1;
-    border-radius: 11px;
+    background: #fafaf9;
+    border: 1px solid #d6d3d1;
+    border-radius: 10px;
     padding: 3px 8px;
     font-size: 10px;
-    color: #334155;
+    color: #44403c;
 }
 QPushButton#presetButton:hover {
-    background: #ecfdf5;
-    border-color: #10b981;
-    color: #047857;
+    background: #fff7ed;
+    border-color: #ea580c;
+    color: #9a3412;
 }
 QPushButton#runButton {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #10b981, stop:1 #059669);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ea580c, stop:1 #c2410c);
     color: #ffffff;
     font-weight: bold;
-    font-size: 13px;
-    padding: 9px 18px;
-    border-radius: 8px;
+    font-size: 12.5px;
+    padding: 8px 16px;
+    border-radius: 7px;
     border: none;
 }
 QPushButton#runButton:hover {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #059669, stop:1 #047857);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #c2410c, stop:1 #9a3412);
 }
 QPushButton#runButton[running="true"] {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #ef4444, stop:1 #dc2626);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #dc2626, stop:1 #b91c1c);
 }
 QPushButton#secondaryBtn {
-    background: #f1f5f9;
-    border: 1px solid #cbd5e1;
+    background: #f5f5f4;
+    border: 1px solid #d6d3d1;
     border-radius: 6px;
-    padding: 6px 12px;
+    padding: 6px 11px;
     font-size: 11px;
-    color: #334155;
+    color: #44403c;
 }
 QPushButton#secondaryBtn:hover {
-    background: #e2e8f0;
-    color: #0f172a;
+    background: #e7e5e4;
+    color: #1c1917;
 }
 QProgressBar {
-    border: 1px solid #cbd5e1;
+    border: 1px solid #d6d3d1;
     border-radius: 6px;
     text-align: center;
-    height: 14px;
-    font-size: 10px;
-    background: #f8fafc;
+    height: 13px;
+    font-size: 9.5px;
+    background: #fafaf9;
 }
 QProgressBar::chunk {
-    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #34d399, stop:1 #10b981);
+    background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #fb923c, stop:1 #ea580c);
     border-radius: 5px;
 }
 QLabel#statusHint {
-    color: #64748b;
+    color: #57534e;
     font-size: 10.5px;
 }
 """
@@ -239,14 +257,13 @@ def parse_thresholds(text: str) -> List[float]:
     if not sorted_vals:
         raise ValueError(i18n.tr("msg_enter_thresholds"))
     if len(sorted_vals) > MAX_THRESHOLDS:
-        raise ValueError(i18n.tr("msg_max_thresholds", count=MAX_THRESHOLDS))
+        raise ValueError(i18n.tr("msg_max_thresholds", None, MAX_THRESHOLDS))
     return sorted_vals
 
 
 class GreenAccessDockWidget(QDockWidget):
     """
-    Modern QGIS Dockable Panel for Green Space Accessibility & Pedshed Analysis.
-    Docks smoothly to the Left or Right of QGIS canvas, or floats independently.
+    Simple, Responsive & Low-Snap-Threshold Panel for Accessibility Analysis (Erişim Analizi).
     """
     closingPlugin = pyqtSignal()
 
@@ -254,14 +271,16 @@ class GreenAccessDockWidget(QDockWidget):
         super(GreenAccessDockWidget, self).__init__(parent or (iface.mainWindow() if iface else None))
         self.iface = iface
         self.setObjectName("GreenAccessDockWidget")
-        self.setAllowedAreas(dock_all_areas())
+        # Allow Left & Right docking when explicitly docked, but prevent aggressive snapping when floating
+        self.setAllowedAreas(dock_left_right())
+        self.topLevelChanged.connect(self._on_floating_changed)
 
         self._task: Optional[AnalysisTask] = None
         self._t_start = 0.0
         self._calc_crs = None
         self._crs_note = ""
         self._params: Optional[dict] = None
-        self._current_lang = i18n.DEFAULT_LANGUAGE
+        self._current_lang = "tr"
         self._plugin_dir = os.path.dirname(os.path.abspath(__file__))
 
         self._build_ui()
@@ -272,37 +291,89 @@ class GreenAccessDockWidget(QDockWidget):
         return i18n.tr(key, self._current_lang, *args, **kwargs)
 
     # ==================================================================
-    # UI Setup & Card Architecture
+    # Reduced Snap Threshold & Explicit Dock Controls
+    # ==================================================================
+    def _on_floating_changed(self, floating: bool) -> None:
+        """When torn off into floating mode, disable aggressive auto-snapping immediately."""
+        if floating:
+            self.setAllowedAreas(dock_none())
+
+    def moveEvent(self, event: Any) -> None:
+        """
+        Enforces a tight 18-pixel outer-edge threshold when dragging the floating panel.
+        Prevents Qt from snapping to wide sidebars or top/bottom toolbars while moving.
+        """
+        super(GreenAccessDockWidget, self).moveEvent(event)
+        if self.isFloating() and self.iface and self.iface.mainWindow():
+            try:
+                mw_rect = self.iface.mainWindow().frameGeometry()
+                cursor_x = QCursor.pos().x()
+                if abs(cursor_x - mw_rect.left()) <= SNAP_EDGE_MARGIN_PX:
+                    if self.allowedAreas() != dock_left():
+                        self.setAllowedAreas(dock_left())
+                elif abs(cursor_x - mw_rect.right()) <= SNAP_EDGE_MARGIN_PX:
+                    if self.allowedAreas() != dock_right():
+                        self.setAllowedAreas(dock_right())
+                else:
+                    if self.allowedAreas() != dock_none():
+                        self.setAllowedAreas(dock_none())
+            except Exception:
+                pass
+
+    def _dock_to_left(self) -> None:
+        self.setAllowedAreas(dock_left_right())
+        self.setFloating(False)
+        if self.iface:
+            self.iface.addDockWidget(dock_left(), self)
+        self.show()
+
+    def _undock_free(self) -> None:
+        self.setAllowedAreas(dock_none())
+        self.setFloating(True)
+        if self.iface and self.iface.mainWindow():
+            mw = self.iface.mainWindow().geometry()
+            w = max(self.width(), 390)
+            h = max(self.height(), 540)
+            self.setGeometry(
+                mw.center().x() - w // 2,
+                mw.center().y() - h // 2,
+                w,
+                h,
+            )
+        self.show()
+        self.raise_()
+
+    def _dock_to_right(self) -> None:
+        self.setAllowedAreas(dock_left_right())
+        self.setFloating(False)
+        if self.iface:
+            self.iface.addDockWidget(dock_right(), self)
+        self.show()
+
+    # ==================================================================
+    # UI Setup & Clean Card Architecture
     # ==================================================================
     def _build_ui(self) -> None:
         self.setStyleSheet(STYLE)
 
-        # Scroll area container for responsive narrow sidebar docking
-        self.scroll_area = QScrollArea()
-        self.scroll_area.setWidgetResizable(True)
-        self.scroll_area.setHorizontalScrollBarPolicy(
-            Qt.ScrollBarPolicy.ScrollBarAlwaysOff if hasattr(Qt, "ScrollBarPolicy") else Qt.ScrollBarAlwaysOff
-        )
-
-        container = QWidget()
-        root = QVBoxLayout(container)
-        root.setContentsMargins(8, 8, 8, 8)
-        root.setSpacing(8)
+        outer = QWidget()
+        root = QVBoxLayout(outer)
+        root.setContentsMargins(7, 7, 7, 7)
+        root.setSpacing(5)
 
         # --- Header Card ---
         self.header_card = QFrame()
         self.header_card.setObjectName("headerCard")
         h_lay = QVBoxLayout(self.header_card)
-        h_lay.setContentsMargins(6, 6, 6, 6)
-        h_lay.setSpacing(6)
+        h_lay.setContentsMargins(6, 5, 6, 5)
+        h_lay.setSpacing(4)
 
         top_row = QHBoxLayout()
-        # Plugin Icon
         self.lbl_icon = QLabel()
         icon_path = os.path.join(self._plugin_dir, "icon.png")
         if os.path.exists(icon_path):
             pix = QPixmap(icon_path).scaled(
-                36, 36,
+                34, 34,
                 Qt.AspectRatioMode.KeepAspectRatio if hasattr(Qt, "AspectRatioMode") else Qt.KeepAspectRatio,
                 Qt.TransformationMode.SmoothTransformation if hasattr(Qt, "TransformationMode") else Qt.SmoothTransformation
             )
@@ -311,10 +382,11 @@ class GreenAccessDockWidget(QDockWidget):
 
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)
-        self.lbl_app_title = QLabel("Green Space Accessibility")
+        self.lbl_app_title = QLabel("Erişim Analizi")
         self.lbl_app_title.setObjectName("appTitle")
-        self.lbl_app_subtitle = QLabel("Network Walkability & Pedshed Suite")
+        self.lbl_app_subtitle = QLabel("Ağ Tabanlı Donatı ve Cephe Erişimi")
         self.lbl_app_subtitle.setObjectName("appSubtitle")
+        self.lbl_app_subtitle.setWordWrap(True)
         title_vbox.addWidget(self.lbl_app_title)
         title_vbox.addWidget(self.lbl_app_subtitle)
         top_row.addLayout(title_vbox, 1)
@@ -328,38 +400,68 @@ class GreenAccessDockWidget(QDockWidget):
         top_row.addWidget(self.cmb_lang)
         h_lay.addLayout(top_row)
 
-        # Badges row (Version + Mandatory CRS Standard)
+        # Badges + Quick Dock/Float Bar
         badge_row = QHBoxLayout()
+        badge_row.setSpacing(4)
+        fixed_pol = (
+            QSizePolicy.Policy.Maximum if hasattr(QSizePolicy, "Policy") else QSizePolicy.Maximum
+        )
         self.badge_ver = QLabel(f"v{PLUGIN_VERSION}")
         self.badge_ver.setObjectName("badgePill")
-        self.badge_crs = QLabel("CRS: EPSG:5253")
+        self.badge_ver.setSizePolicy(fixed_pol, fixed_pol)
+        self.badge_crs = QLabel("EPSG:5253")
         self.badge_crs.setObjectName("crsPill")
+        self.badge_crs.setSizePolicy(fixed_pol, fixed_pol)
         badge_row.addWidget(self.badge_ver)
         badge_row.addWidget(self.badge_crs)
         badge_row.addStretch(1)
+
+        self.btn_dock_l = QPushButton("⬅ Sol")
+        self.btn_dock_l.setObjectName("dockBtn")
+        self.btn_dock_l.clicked.connect(self._dock_to_left)
+
+        self.btn_dock_f = QPushButton("🪟 Serbest")
+        self.btn_dock_f.setObjectName("dockBtn")
+        self.btn_dock_f.clicked.connect(self._undock_free)
+
+        self.btn_dock_r = QPushButton("Sağ ➡")
+        self.btn_dock_r.setObjectName("dockBtn")
+        self.btn_dock_r.clicked.connect(self._dock_to_right)
+
+        badge_row.addWidget(self.btn_dock_l)
+        badge_row.addWidget(self.btn_dock_f)
+        badge_row.addWidget(self.btn_dock_r)
         h_lay.addLayout(badge_row)
 
         root.addWidget(self.header_card)
 
-        # --- Main Tabbed Panels ---
+        # --- Main Tabbed Panels (Inside ScrollArea) ---
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setHorizontalScrollBarPolicy(
+            Qt.ScrollBarPolicy.ScrollBarAlwaysOff if hasattr(Qt, "ScrollBarPolicy") else Qt.ScrollBarAlwaysOff
+        )
+
         self.tabs = QTabWidget()
         self.tabs.setObjectName("modernTabs")
-        root.addWidget(self.tabs, 1)
 
         self.tab_data = self._create_data_tab()
         self.tab_adv = self._create_advanced_tab()
         self.tab_rep = self._create_report_tab()
 
-        self.tabs.addTab(self.tab_data, "Data")
-        self.tabs.addTab(self.tab_adv, "Advanced")
-        self.tabs.addTab(self.tab_rep, "Report")
+        self.tabs.addTab(self.tab_data, "Veri")
+        self.tabs.addTab(self.tab_adv, "Ayarlar")
+        self.tabs.addTab(self.tab_rep, "Rapor")
 
-        # --- Progress Bar & Status Pill ---
+        self.scroll_area.setWidget(self.tabs)
+        root.addWidget(self.scroll_area, 1)
+
+        # --- Progress Bar & Status ---
         self.progress = QProgressBar()
         self.progress.setRange(0, 100)
         root.addWidget(self.progress)
 
-        self.lbl_status = QLabel("Ready")
+        self.lbl_status = QLabel("Hazır")
         self.lbl_status.setObjectName("statusHint")
         root.addWidget(self.lbl_status)
 
@@ -379,31 +481,34 @@ class GreenAccessDockWidget(QDockWidget):
         action_row.addWidget(self.btn_run, 2)
         root.addLayout(action_row)
 
-        self.scroll_area.setWidget(container)
-        self.setWidget(self.scroll_area)
+        self.setWidget(outer)
 
     def _create_data_tab(self) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(6, 6, 6, 6)
-        lay.setSpacing(8)
+        lay.setSpacing(6)
 
-        # Layer Selection Card
+        # 1. Layer Selection Card
         self.grp_layers = QGroupBox()
-        f = QFormLayout(self.grp_layers)
-        f.setContentsMargins(8, 12, 8, 8)
-        f.setSpacing(6)
+        f = QVBoxLayout(self.grp_layers)
+        f.setContentsMargins(8, 10, 8, 8)
+        f.setSpacing(4)
 
         self.cmb_roads = QgsMapLayerComboBox()
         self.cmb_roads.setFilters(layer_filter("LineLayer"))
 
+        # Supports ANY target facility (School, Park, Health, Station — Polygon or Point)
         self.cmb_parks = QgsMapLayerComboBox()
-        self.cmb_parks.setFilters(layer_filter("PolygonLayer"))
+        self.cmb_parks.setFilters(layer_filter("PolygonLayer", "PointLayer"))
 
         self.cmb_buildings = QgsMapLayerComboBox()
         self.cmb_buildings.setFilters(layer_filter("PolygonLayer", "PointLayer"))
         self.cmb_buildings.setAllowEmptyLayer(True)
-        self.cmb_buildings.setLayer(None)
+
+        self.cmb_bldg_mode = QComboBox()
+        self.cmb_bldg_mode.addItem("Closest road-facing facade", "facade")
+        self.cmb_bldg_mode.addItem("Centroid", "centroid")
 
         self.cmb_weight = QgsFieldComboBox()
         self.cmb_weight.setAllowEmptyFieldName(True)
@@ -415,32 +520,45 @@ class GreenAccessDockWidget(QDockWidget):
         self.lbl_roads = QLabel()
         self.lbl_parks = QLabel()
         self.lbl_buildings = QLabel()
+        self.lbl_bldg_mode = QLabel()
         self.lbl_weight = QLabel()
 
-        f.addRow(self.lbl_roads, self.cmb_roads)
-        f.addRow(self.lbl_parks, self.cmb_parks)
-        f.addRow(self.lbl_buildings, self.cmb_buildings)
-        f.addRow(self.lbl_weight, self.cmb_weight)
-        f.addRow(self.chk_selected)
+        adj_pol = (
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            if hasattr(QComboBox, "SizeAdjustPolicy")
+            else QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        for lbl, wdg in (
+            (self.lbl_roads, self.cmb_roads),
+            (self.lbl_parks, self.cmb_parks),
+            (self.lbl_buildings, self.cmb_buildings),
+            (self.lbl_bldg_mode, self.cmb_bldg_mode),
+            (self.lbl_weight, self.cmb_weight),
+        ):
+            wdg.setSizeAdjustPolicy(adj_pol)
+            wdg.setMinimumContentsLength(6)
+            wdg.setMinimumWidth(80)
+            f.addWidget(lbl)
+            f.addWidget(wdg)
+        f.addWidget(self.chk_selected)
         lay.addWidget(self.grp_layers)
 
-        # Distance Thresholds Card
+        # 2. Distance Thresholds Card
         self.grp_thresholds = QGroupBox()
         v = QVBoxLayout(self.grp_thresholds)
-        v.setContentsMargins(8, 12, 8, 8)
-        v.setSpacing(6)
+        v.setContentsMargins(8, 10, 8, 8)
+        v.setSpacing(5)
 
-        self.txt_distances = QLineEdit("300, 500, 1000")
+        self.txt_distances = QLineEdit("250, 500, 1000")
         v.addWidget(self.txt_distances)
 
-        # Quick preset buttons (e.g. 500m, 300-500-1000, 400-800-1200 PlanX / PLN311 standard)
         pr = QHBoxLayout()
-        pr.setSpacing(4)
+        pr.setSpacing(3)
         for label, text in (
-            ("500 m", "500"),
-            ("300 · 500 · 1000", "300, 500, 1000"),
-            ("400 · 800 · 1200 (5-10-15m)", "400, 800, 1200"),
-            ("250 · 500 · 750 · 1000", "250, 500, 750, 1000"),
+            ("250·500", "250, 500"),
+            ("250·500·1000", "250, 500, 1000"),
+            ("300·500·1000", "300, 500, 1000"),
+            ("400·800·1200", "400, 800, 1200"),
         ):
             b = QPushButton(label)
             b.setObjectName("presetButton")
@@ -473,50 +591,72 @@ class GreenAccessDockWidget(QDockWidget):
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(6, 6, 6, 6)
-        lay.setSpacing(8)
+        lay.setSpacing(6)
 
         # Network Gap Repair Card
         self.grp_repair = QGroupBox()
-        f_rep = QFormLayout(self.grp_repair)
-        f_rep.setContentsMargins(8, 12, 8, 8)
+        f_rep = QVBoxLayout(self.grp_repair)
+        f_rep.setContentsMargins(8, 10, 8, 8)
+        f_rep.setSpacing(4)
         self.spn_gap = self._spin(0, 100, 15, 0, " m")
-        self.chk_disc = QCheckBox()
-        self.chk_disc.setChecked(True)
         self.chk_node = QCheckBox()
+        self.chk_node.setChecked(True)  # Default ON: automatically node crossing road lines
+        self.chk_disc = QCheckBox()
+        self.chk_disc.setChecked(False)  # Default OFF: heal local T-junction gaps even in same component
         self.lbl_gap = QLabel()
-        f_rep.addRow(self.lbl_gap, self.spn_gap)
-        f_rep.addRow(self.chk_disc)
-        f_rep.addRow(self.chk_node)
+        row_gap = QHBoxLayout()
+        row_gap.addWidget(self.lbl_gap, 1)
+        row_gap.addWidget(self.spn_gap)
+        f_rep.addLayout(row_gap)
+        f_rep.addWidget(self.chk_node)
+        f_rep.addWidget(self.chk_disc)
         lay.addWidget(self.grp_repair)
 
-        # Park Access & Snapping Card
+        # Target Facility Access & Snapping Card
         self.grp_entry = QGroupBox()
-        f_ent = QFormLayout(self.grp_entry)
-        f_ent.setContentsMargins(8, 12, 8, 8)
+        f_ent = QVBoxLayout(self.grp_entry)
+        f_ent.setContentsMargins(8, 10, 8, 8)
+        f_ent.setSpacing(4)
         self.cmb_origin = QComboBox()
+        adj_pol = (
+            QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon
+            if hasattr(QComboBox, "SizeAdjustPolicy")
+            else QComboBox.AdjustToMinimumContentsLengthWithIcon
+        )
+        self.cmb_origin.setSizeAdjustPolicy(adj_pol)
+        self.cmb_origin.setMinimumContentsLength(6)
+        self.cmb_origin.setMinimumWidth(80)
+        self.cmb_origin.addItem("All facades / boundary", "boundary")
         self.cmb_origin.addItem("Centroid", "centroid")
-        self.cmb_origin.addItem("Entire boundary", "boundary")
         self.spn_snap = self._spin(10, 2000, 200, 0, " m")
         self.spn_area = self._spin(0, 1e7, 0, 0, " m²", 100)
         self.chk_offset = QCheckBox()
-        self.chk_offset.setChecked(True)
+        self.chk_offset.setChecked(False)  # Default OFF: treat closest road-facing facade as block origin
 
         self.lbl_entry_mode = QLabel()
         self.lbl_snap = QLabel()
         self.lbl_area = QLabel()
-        f_ent.addRow(self.lbl_entry_mode, self.cmb_origin)
-        f_ent.addRow(self.lbl_snap, self.spn_snap)
-        f_ent.addRow(self.lbl_area, self.spn_area)
-        f_ent.addRow(self.chk_offset)
+        f_ent.addWidget(self.lbl_entry_mode)
+        f_ent.addWidget(self.cmb_origin)
+        row_snap = QHBoxLayout()
+        row_snap.addWidget(self.lbl_snap, 1)
+        row_snap.addWidget(self.spn_snap)
+        f_ent.addLayout(row_snap)
+        row_area = QHBoxLayout()
+        row_area.addWidget(self.lbl_area, 1)
+        row_area.addWidget(self.spn_area)
+        f_ent.addLayout(row_area)
+        f_ent.addWidget(self.chk_offset)
         lay.addWidget(self.grp_entry)
 
         # Outputs & Catchments Card
         self.grp_outputs = QGroupBox()
-        f_out = QFormLayout(self.grp_outputs)
-        f_out.setContentsMargins(8, 12, 8, 8)
+        f_out = QVBoxLayout(self.grp_outputs)
+        f_out.setContentsMargins(8, 10, 8, 8)
+        f_out.setSpacing(4)
         self.chk_poly = QCheckBox()
         self.chk_poly.setChecked(True)
-        self.spn_buf = self._spin(1, 500, 25, 0, " m")
+        self.spn_buf = self._spin(1, 500, 28, 0, " m")
         self.chk_circ = QCheckBox()
         self.chk_circ.setChecked(True)
         self.chk_debug = QCheckBox()
@@ -525,11 +665,17 @@ class GreenAccessDockWidget(QDockWidget):
 
         self.lbl_buf = QLabel()
         self.lbl_speed = QLabel()
-        f_out.addRow(self.chk_poly)
-        f_out.addRow(self.lbl_buf, self.spn_buf)
-        f_out.addRow(self.chk_circ)
-        f_out.addRow(self.chk_debug)
-        f_out.addRow(self.lbl_speed, self.spn_speed)
+        f_out.addWidget(self.chk_poly)
+        row_buf = QHBoxLayout()
+        row_buf.addWidget(self.lbl_buf, 1)
+        row_buf.addWidget(self.spn_buf)
+        f_out.addLayout(row_buf)
+        f_out.addWidget(self.chk_circ)
+        f_out.addWidget(self.chk_debug)
+        row_spd = QHBoxLayout()
+        row_spd.addWidget(self.lbl_speed, 1)
+        row_spd.addWidget(self.spn_speed)
+        f_out.addLayout(row_spd)
         lay.addWidget(self.grp_outputs)
 
         self.chk_poly.toggled.connect(self.spn_buf.setEnabled)
@@ -572,6 +718,10 @@ class GreenAccessDockWidget(QDockWidget):
         self.lbl_app_title.setText(_t("plugin_title"))
         self.lbl_app_subtitle.setText(_t("plugin_subtitle"))
 
+        self.btn_dock_l.setText(_t("btn_dock_left"))
+        self.btn_dock_f.setText(_t("btn_dock_float"))
+        self.btn_dock_r.setText(_t("btn_dock_right"))
+
         # Tabs
         self.tabs.setTabText(0, f"📊 {_t('tab_data')}")
         self.tabs.setTabText(1, f"⚙️ {_t('tab_advanced')}")
@@ -582,6 +732,15 @@ class GreenAccessDockWidget(QDockWidget):
         self.lbl_roads.setText(_t("roads_layer"))
         self.lbl_parks.setText(_t("parks_layer"))
         self.lbl_buildings.setText(_t("buildings_layer"))
+        self.lbl_bldg_mode.setText(_t("bldg_mode_label"))
+
+        cur_bmode = self.cmb_bldg_mode.currentData() or "facade"
+        self.cmb_bldg_mode.clear()
+        self.cmb_bldg_mode.addItem(_t("bldg_mode_facade"), "facade")
+        self.cmb_bldg_mode.addItem(_t("bldg_mode_centroid"), "centroid")
+        b_idx = self.cmb_bldg_mode.findData(cur_bmode)
+        self.cmb_bldg_mode.setCurrentIndex(max(0, b_idx))
+
         self.lbl_weight.setText(_t("weight_field"))
         self.cmb_weight.setToolTip(_t("weight_field_tip"))
         self.chk_selected.setText(_t("use_selected"))
@@ -589,7 +748,7 @@ class GreenAccessDockWidget(QDockWidget):
         self.grp_thresholds.setTitle(f"🚶 {_t('thresholds_group')}")
         self.lbl_thresholds_hint.setText(_t("thresholds_tip"))
 
-        # Advanced Tab
+        # Settings Tab
         self.grp_repair.setTitle(f"🔧 {_t('network_repair_group')}")
         self.lbl_gap.setText(_t("gap_tolerance"))
         self.spn_gap.setToolTip(_t("gap_tolerance_tip"))
@@ -598,12 +757,12 @@ class GreenAccessDockWidget(QDockWidget):
         self.chk_node.setText(_t("node_crossings"))
         self.chk_node.setToolTip(_t("node_crossings_tip"))
 
-        self.grp_entry.setTitle(f"🌳 {_t('park_entry_group')}")
+        self.grp_entry.setTitle(f"🎯 {_t('park_entry_group')}")
         self.lbl_entry_mode.setText(_t("entry_mode"))
-        cur_origin = self.cmb_origin.currentData()
+        cur_origin = self.cmb_origin.currentData() or "boundary"
         self.cmb_origin.clear()
-        self.cmb_origin.addItem(_t("entry_centroid"), "centroid")
         self.cmb_origin.addItem(_t("entry_boundary"), "boundary")
+        self.cmb_origin.addItem(_t("entry_centroid"), "centroid")
         idx = self.cmb_origin.findData(cur_origin)
         self.cmb_origin.setCurrentIndex(max(0, idx))
 
@@ -627,7 +786,7 @@ class GreenAccessDockWidget(QDockWidget):
         is_running = self.btn_run.property("running")
         self.btn_run.setText(_t("btn_cancel") if is_running else f"▶ {_t('btn_run')}")
         if not is_running:
-            self.lbl_status.setText(f"🟢 {_t('status_ready')}")
+            self.lbl_status.setText(f"🟠 {_t('status_ready')}")
 
         if not self.txt_report.toPlainText().strip() or "Henüz" in self.txt_report.toPlainText():
             self.txt_report.setHtml(_t("no_report_yet"))
@@ -637,9 +796,16 @@ class GreenAccessDockWidget(QDockWidget):
     # ==================================================================
     def _guess_layers(self) -> None:
         hints = (
-            (self.cmb_roads, ("yol", "road", "street", "highway", "ulasim", "network")),
-            (self.cmb_parks, ("yesil", "yeşil", "park", "green", "acik_alan")),
-            (self.cmb_buildings, ("bina", "konut", "building", "yapi", "residential")),
+            (self.cmb_roads, ("yol", "sokak", "cadde", "road", "street", "highway", "ulasim", "ulaşım", "network")),
+            (
+                self.cmb_parks,
+                (
+                    "donati", "donatı", "okul", "egitim", "eğitim", "saglik", "sağlık",
+                    "yesil", "yeşil", "park", "istasyon", "durak", "hedef", "facility",
+                    "school", "green", "health",
+                ),
+            ),
+            (self.cmb_buildings, ("ada", "konut", "bina", "parsel", "yapi", "yapı", "building", "block", "residential")),
         )
         for combo, words in hints:
             for i in range(combo.count()):
@@ -651,25 +817,32 @@ class GreenAccessDockWidget(QDockWidget):
     def _load_settings(self) -> None:
         s = QSettings()
         g = lambda k, d: s.value(SETTINGS_PREFIX + k, d)
-        saved_lang = str(g("language", i18n.DEFAULT_LANGUAGE))
+        saved_lang = str(g("language", "tr"))
         idx = self.cmb_lang.findData(saved_lang)
         if idx >= 0:
             self.cmb_lang.setCurrentIndex(idx)
             self._current_lang = saved_lang
 
-        self.txt_distances.setText(str(g("distances", self.txt_distances.text())))
+        self.txt_distances.setText(str(g("distances", "250, 500, 1000")))
         self.spn_gap.setValue(float(g("gap", 15)))
-        self.chk_disc.setChecked(str(g("only_disc", "true")).lower() == "true")
-        self.chk_node.setChecked(str(g("node", "false")).lower() == "true")
-        origin_val = str(g("origin", "centroid"))
+        self.chk_disc.setChecked(str(g("only_disc", "false")).lower() == "true")
+        self.chk_node.setChecked(str(g("node", "true")).lower() == "true")
+
+        origin_val = str(g("origin", "boundary"))
         o_idx = self.cmb_origin.findData(origin_val)
         if o_idx >= 0:
             self.cmb_origin.setCurrentIndex(o_idx)
+
+        bmode_val = str(g("bldg_mode", "facade"))
+        b_idx = self.cmb_bldg_mode.findData(bmode_val)
+        if b_idx >= 0:
+            self.cmb_bldg_mode.setCurrentIndex(b_idx)
+
         self.spn_snap.setValue(float(g("snap", 200)))
         self.spn_area.setValue(float(g("min_area", 0)))
-        self.chk_offset.setChecked(str(g("offset", "true")).lower() == "true")
+        self.chk_offset.setChecked(str(g("offset", "false")).lower() == "true")
         self.chk_poly.setChecked(str(g("poly", "true")).lower() == "true")
-        self.spn_buf.setValue(float(g("buf", 25)))
+        self.spn_buf.setValue(float(g("buf", 28)))
         self.chk_circ.setChecked(str(g("circ", "true")).lower() == "true")
         self.chk_debug.setChecked(str(g("debug", "true")).lower() == "true")
         self.spn_speed.setValue(float(g("speed", 4.8)))
@@ -685,6 +858,7 @@ class GreenAccessDockWidget(QDockWidget):
             ("only_disc", b(self.chk_disc.isChecked())),
             ("node", b(self.chk_node.isChecked())),
             ("origin", self.cmb_origin.currentData()),
+            ("bldg_mode", self.cmb_bldg_mode.currentData()),
             ("snap", self.spn_snap.value()),
             ("min_area", self.spn_area.value()),
             ("offset", b(self.chk_offset.isChecked())),
@@ -712,7 +886,7 @@ class GreenAccessDockWidget(QDockWidget):
         path, _flt = QFileDialog.getSaveFileName(
             self,
             self._tr("save_report_title"),
-            "green_space_accessibility_report.html",
+            "accessibility_analysis_report.html",
             self._tr("save_report_filter"),
         )
         if not path:
@@ -724,7 +898,7 @@ class GreenAccessDockWidget(QDockWidget):
                 else:
                     fh.write(
                         "<!DOCTYPE html><html><head><meta charset='utf-8'>"
-                        "<title>Green Space Accessibility Report</title></head><body>"
+                        "<title>Accessibility Analysis Report</title></head><body>"
                         f"{self.txt_report.toHtml()}</body></html>"
                     )
         except OSError as exc:
@@ -788,7 +962,8 @@ class GreenAccessDockWidget(QDockWidget):
             "gap_tol": self.spn_gap.value(),
             "only_disconnected": self.chk_disc.isChecked(),
             "node_crossings": self.chk_node.isChecked(),
-            "origin_mode": self.cmb_origin.currentData(),
+            "origin_mode": self.cmb_origin.currentData() or "boundary",
+            "bldg_mode": self.cmb_bldg_mode.currentData() or "facade",
             "max_snap": self.spn_snap.value(),
             "min_area": self.spn_area.value(),
             "include_offset": self.chk_offset.isChecked(),

@@ -107,6 +107,48 @@ class TestNetwork(unittest.TestCase):
         with self.assertRaises(N.Cancelled):
             net.add_lines(grid_roads(40))
 
+    def test_facade_closest_road_to_facility(self):
+        # Image 2 scenario:
+        # School at (0, 104).
+        # Top road (y=104) goes directly from school (0,104) to (200,104) -> at x=180, dist=180m (<=250m GREEN).
+        # Right road (x=203) goes around a long detour -> dist ~ 350m (>250m YELLOW).
+        # Block rectangle: x in [140, 200], y in [0, 100]. Centroid=(170, 50).
+        # Centroid (170, 50) is geometrically closer to Right road (33m) than Top road (54m),
+        # but the block's top facade (y=100) faces the Top road (4m away, 180m from school)!
+        roads = [
+            (1, [(0, 104), (200, 104)]),
+            (2, [(0, 104), (0, -150), (203, -150), (203, 100)]),
+        ]
+        parks = [{"id": 1, "centroid": (0, 104), "ring": [(0, 104)]}]
+        facade_pts = [
+            (140, 0), (170, 0), (200, 0),
+            (200, 25), (200, 50), (200, 75), (200, 100),
+            (180, 100), (160, 100), (140, 100),
+            (140, 75), (140, 50), (140, 25),
+        ]
+        blds = [(10, 170.0, 50.0, 100.0, facade_pts)]
+        r = N.analyze(
+            roads,
+            parks,
+            blds,
+            {
+                "thresholds": [250, 500],
+                "gap_tol": 15,
+                "node_crossings": True,
+                "max_snap": 100,
+                "include_offset": False,
+                "bldg_mode": "facade",
+            },
+        )
+        b_res = r["buildings"][0]
+        conn = r["building_connectors"][0]
+        # Must pick the top facade (fy == 100) facing the top road (y=104) at x=140 -> 140m <= 250m!
+        self.assertLessEqual(b_res[4], 250.0)
+        self.assertAlmostEqual(b_res[4], 140.0, places=1)
+        self.assertAlmostEqual(conn[4], 100.0, places=1)  # fy on top facade
+        self.assertAlmostEqual(conn[6], 104.0, places=1)  # qy on top road
+        self.assertEqual(r["stats"]["per_threshold"][250]["buildings"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()

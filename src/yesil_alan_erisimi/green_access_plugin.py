@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-QGIS Plugin Interface Hook for Green Space Accessibility & Pedshed Analysis.
+QGIS Plugin Interface Hook for Accessibility Analysis (Erişim Analizi).
 Author / Developer: Baran Adsuna (https://github.com/baranadsuna)
 CRS Standard: EPSG:5253 (TUREF / TM30)
 Dual Compatible: QGIS 3 & QGIS 4 / Qt5 & Qt6
@@ -16,7 +16,7 @@ from qgis.PyQt.QtWidgets import QAction
 from .compat import dock_right
 from .gui_dialog import GreenAccessDockWidget
 
-MENU_TITLE = "&Green Space Analysis"
+MENU_TITLE = "&Erişim Analizi (Accessibility Analysis)"
 
 
 class GreenAccessPlugin:
@@ -29,15 +29,15 @@ class GreenAccessPlugin:
     def initGui(self) -> None:
         icon_path = os.path.join(self.plugin_dir, "icon.png")
         icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
-        self.action = QAction(icon, "Green Space Accessibility Analysis", self.iface.mainWindow())
+        self.action = QAction(icon, "Erişim Analizi (Accessibility Analysis)", self.iface.mainWindow())
         self.action.setToolTip(
-            "Toggle dockable green space walking distance, isochrones, pedshed ratio, and facility allocation panel"
+            "Ağ tabanlı donatı erişilebilirliği, en yakın cephe bağlantısı ve pedshed analizi"
         )
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(MENU_TITLE, self.action)
         self.iface.addToolBarIcon(self.action)
 
-        # Initialize dock widget and register to QGIS dock area
+        # Initialize dock widget and register to QGIS right dock area
         self.dock = GreenAccessDockWidget(self.iface)
         self.dock.closingPlugin.connect(self._on_dock_closed)
         self.iface.addDockWidget(dock_right(), self.dock)

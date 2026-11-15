@@ -97,6 +97,17 @@ def dock_left():
         return Qt.LeftDockWidgetArea
 
 
+def dock_none():
+    try:
+        return Qt.DockWidgetArea.NoDockWidgetArea
+    except AttributeError:
+        return Qt.NoDockWidgetArea
+
+
+def dock_left_right():
+    return dock_left() | dock_right()
+
+
 def dock_all_areas():
     try:
         return Qt.DockWidgetArea.AllDockWidgetAreas

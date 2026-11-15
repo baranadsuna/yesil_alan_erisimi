@@ -1,15 +1,15 @@
 [general]
-name=Green Space Accessibility & Pedshed Analysis
+name=Erişim Analizi (Accessibility Analysis)
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 supportsQt6=True
-description=Evaluates urban green space accessibility via topological road network Dijkstra, walkability isochrones, pedshed ratio, and p-median facility load in EPSG:5253 with 5-language support (EN, TR, ZH, ES, ID).
-about=Calculates actual walking network distances from residential buildings to urban parks and green spaces. Produces mid-street clipped service area lines, walkability isochrones, benchmark Euclidean buffer circles, pedshed coverage ratios, building-level accessibility classifications, and facility demand load distribution. Features topological road network gap healing (dead-end and T-junction bridges) and dynamic 5-language internationalization (English, Turkish, Chinese, Spanish, Indonesian).
-version=5.1.0
+description=Evaluates urban facility accessibility (schools, parks, health, transit) via road network Dijkstra, closest road-facing facade connections, walkability isochrones, pedshed ratio, and p-median load in EPSG:5253 with 5-language support (TR, EN, ZH, ES, ID).
+about=Calculates true street-network walking distances from residential blocks and buildings (connecting from the facade closest to the road leading to the target facility) to any urban facility (schools, green spaces, health centers, stations). Produces colored block/building polygons, mid-street clipped service area lines, non-overlapping walkability isochrones, Euclidean benchmark circles, pedshed ratios, and p-median demand allocation. Features automatic planar road noding, T-junction gap healing, low-threshold dock/float controls, and 5-language support.
+version=5.2.0
 author=Baran Adsuna
 email=baran.adsuna@ogr.deu.edu.tr
-changelog=5.1.0 - Hardened with PLN311 topological network engine, mid-street edge clipping, pedshed coverage ratios (Leslie et al., 2007), p-median facility demand allocation (Hakimi, 1964; Teitz & Bart, 1968), full dual Qt5/Qt6 & QGIS 3/4 compliance, and runtime 5-language internationalization (EN, TR, ZH, ES, ID) in EPSG:5253 standard.
-tags=green space, accessibility, walkability, pedshed, network analysis, isochrone, p-median, location allocation, urban planning, epsg5253
+changelog=5.2.0 - Renamed to Erişim Analizi (Accessibility Analysis) for universal urban facility evaluation (schools, parks, health, transit). Added closest-to-facility road-facing facade connection for residential blocks/buildings, colored block accessibility polygons, non-overlapping clean isochrones, reduced 18px dock snap threshold with float controls, new terracotta UI theme, and new icon.
+tags=accessibility, erisim analizi, school, green space, walkability, pedshed, network analysis, isochrone, p-median, urban planning, epsg5253
 homepage=https://baranadsuna.github.io/yesil_alan_erisimi
 tracker=https://github.com/baranadsuna/yesil_alan_erisimi/issues
 repository=https://github.com/baranadsuna/yesil_alan_erisimi

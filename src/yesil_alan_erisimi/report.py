@@ -105,7 +105,7 @@ def build_report_html(
     h.append(f"<p style='color:#64748b;margin-top:0;font-size:12px'>⏱ {_t('status_completed', elapsed)} | <b>CRS:</b> {crs_note or 'EPSG:5253'}</p>")
 
     # 1. Road Network Summary
-    h.append(f"<h3 style='margin-top:16px;margin-bottom:6px;color:#1e40af;font-size:14px'>🛣 {_t('report_network_summary')}</h3>")
+    h.append(f"<h3 style='margin-top:16px;margin-bottom:6px;color:#9a3412;font-size:14px'>🛣 {_t('report_network_summary')}</h3>")
     nb = st.get("bridges_node", 0) + st.get("bridges_segment", 0)
     h.append("<ul style='margin-top:2px;padding-left:20px'>")
     h.append(f"<li><b>{fmt_num(st.get('segments', 0), lang=lang)}</b> segments, <b>{fmt_num(st.get('nodes', 0), lang=lang)}</b> nodes, <b>{fmt_num(st.get('edges', 0), lang=lang)}</b> edges.</li>")
@@ -113,11 +113,11 @@ def build_report_html(
     h.append(f"<li>Repaired gaps: <b>{fmt_num(nb, lang=lang)}</b> ({st.get('bridges_node', 0)} node-node, {st.get('bridges_segment', 0)} T-junction; tolerance {fmt_m(params.get('gap_tol', 15))} m)</li>")
     h.append("</ul>")
 
-    # 2. Green Space Summary
-    h.append(f"<h3 style='margin-top:16px;margin-bottom:6px;color:#15803d;font-size:14px'>🌳 {_t('report_parks_summary')}</h3>")
+    # 2. Target Facility Summary
+    h.append(f"<h3 style='margin-top:16px;margin-bottom:6px;color:#c2410c;font-size:14px'>🎯 {_t('report_parks_summary')}</h3>")
     skipped = result.get("skipped_small_parks", 0)
     h.append("<ul style='margin-top:2px;padding-left:20px'>")
-    h.append(f"<li>Total evaluated green spaces: <b>{fmt_num(st.get('parks_total', 0), lang=lang)}</b>" + (f" ({skipped} small parks filtered)" if skipped else "") + "</li>")
+    h.append(f"<li>Total evaluated target facilities: <b>{fmt_num(st.get('parks_total', 0), lang=lang)}</b>" + (f" ({skipped} filtered by area)" if skipped else "") + "</li>")
     h.append(f"<li>Successfully connected to road network: <b>{fmt_num(st.get('parks_snapped', 0), lang=lang)}</b></li>")
     if st.get("parks_unsnapped", 0) > 0:
         h.append(f"<li style='color:#b91c1c'><b>Unsnapped (isolated > {fmt_m(params.get('max_snap', 200))} m):</b> {st.get('parks_unsnapped', 0)}</li>")
