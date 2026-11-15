@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-QGIS Plugin Interface Hook for Accessibility Analysis (Erişim Analizi).
+QGIS Plugin Interface Hook for Accessibility Analysis.
 Author / Developer: Baran Adsuna (https://github.com/baranadsuna)
 CRS Standard: EPSG:5253 (TUREF / TM30)
 Dual Compatible: QGIS 3 & QGIS 4 / Qt5 & Qt6
@@ -16,7 +16,7 @@ from qgis.PyQt.QtWidgets import QAction
 from .compat import dock_right
 from .gui_dialog import GreenAccessDockWidget
 
-MENU_TITLE = "&Erişim Analizi (Accessibility Analysis)"
+MENU_TITLE = "&Accessibility Analysis"
 
 
 class GreenAccessPlugin:
@@ -29,9 +29,9 @@ class GreenAccessPlugin:
     def initGui(self) -> None:
         icon_path = os.path.join(self.plugin_dir, "icon.png")
         icon = QIcon(icon_path) if os.path.exists(icon_path) else QIcon()
-        self.action = QAction(icon, "Erişim Analizi (Accessibility Analysis)", self.iface.mainWindow())
+        self.action = QAction(icon, "Accessibility Analysis", self.iface.mainWindow())
         self.action.setToolTip(
-            "Ağ tabanlı donatı erişilebilirliği, en yakın cephe bağlantısı ve pedshed analizi"
+            "Urban facility network accessibility, closest road-facing facade snapping, walkability isochrones, and pedshed analysis"
         )
         self.action.triggered.connect(self.run)
         self.iface.addPluginToMenu(MENU_TITLE, self.action)

@@ -3,20 +3,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Green Space Accessibility &amp; Pedshed Analysis (v5.1.0) — Academic Methodology &amp; User Guide</title>
+  <title>Accessibility Analysis (v5.3.0) — Urban Network Accessibility, Facade Snapping &amp; Pedshed Suite</title>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous" />
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
   <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"
     onload="renderMathInElement(document.body, {delimiters: [{left: '$$', right: '$$', display: true}, {left: '$', right: '$', display: false}]});"></script>
   <style>
     :root {
-      --bg: #0b1120;
-      --card: #1e293b;
-      --border: #334155;
+      --bg: #070c16;
+      --card: #111c2d;
+      --border: #1e293b;
       --text: #f8fafc;
       --muted: #94a3b8;
-      --accent: #38bdf8;
-      --emerald: #10b981;
+      --accent: #3b82f6;
+      --emerald: #22c55e;
+      --amber: #f59e0b;
     }
     * { box-sizing: border-box; }
     body {
@@ -27,43 +28,49 @@
       line-height: 1.68;
     }
     header {
-      background: linear-gradient(135deg, #0f172a 0%, #064e3b 50%, #047857 100%);
+      background: radial-gradient(circle at 20% 20%, #064e3b 0%, #0f172a 55%, #070c16 100%);
       border-bottom: 1px solid var(--border);
-      padding: 3rem 1.5rem 2.5rem;
+      padding: 2.8rem 1.5rem 2.2rem;
     }
     .container { max-width: 1140px; margin: 0 auto; }
     .badge-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1rem; }
     .badge {
       font-size: 0.76rem; font-weight: 700; text-transform: uppercase;
       padding: 0.3rem 0.75rem; border-radius: 999px;
-      background: rgba(15, 23, 42, 0.72); border: 1px solid rgba(148, 163, 184, 0.35);
+      background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(148, 163, 184, 0.35);
       color: #e2e8f0;
     }
-    .badge.crs { border-color: var(--emerald); color: #6ee7b7; }
-    h1 { margin: 0 0 0.6rem; font-size: 2.2rem; }
+    .badge.crs { border-color: var(--emerald); color: #86efac; }
+    .badge.blue { border-color: var(--accent); color: #93c5fd; }
+    h1 { margin: 0 0 0.5rem; font-size: 2.3rem; letter-spacing: -0.02em; }
     h2 {
       margin-top: 2.5rem; padding-bottom: 0.45rem;
       border-bottom: 1px solid var(--border); color: #f1f5f9;
     }
-    h3 { color: #7dd3fc; margin-top: 1.35rem; margin-bottom: 0.5rem; }
+    h3 { color: #4ade80; margin-top: 1.25rem; margin-bottom: 0.5rem; }
     main { padding: 2rem 1.5rem 4rem; }
     .panel {
       background: var(--card); border: 1px solid var(--border);
-      border-radius: 10px; padding: 1.35rem; margin: 1.1rem 0;
+      border-radius: 12px; padding: 1.4rem; margin: 1.15rem 0;
+      box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
     }
     .math-block {
-      background: rgba(15, 23, 42, 0.85); border-left: 4px solid var(--accent);
+      background: rgba(7, 12, 22, 0.9); border-left: 4px solid var(--emerald);
       padding: 1rem 1.25rem; border-radius: 6px; overflow-x: auto; margin: 0.85rem 0;
     }
     table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.92rem; }
     th, td { padding: 0.75rem 0.85rem; border: 1px solid var(--border); text-align: left; }
-    th { background: #1e3a5f; color: #e0f2fe; }
-    tr:nth-child(even) { background: rgba(51, 65, 85, 0.35); }
-    a { color: var(--accent); text-decoration: none; }
+    th { background: #0f291e; color: #bbf7d0; }
+    tr:nth-child(even) { background: rgba(30, 41, 59, 0.35); }
+    a { color: #60a5fa; text-decoration: none; }
     a:hover { text-decoration: underline; }
     .doi-badge {
       display: inline-block; font-family: monospace; font-size: 0.8rem;
-      background: #0369a1; color: #fff; padding: 0.15rem 0.45rem; border-radius: 4px;
+      background: #1d4ed8; color: #fff; padding: 0.18rem 0.5rem; border-radius: 4px;
+    }
+    .anim-frame {
+      margin: 1.4rem 0; border-radius: 14px; overflow: hidden;
+      border: 1px solid #1e293b; box-shadow: 0 16px 40px rgba(0,0,0,0.55);
     }
   </style>
 </head>
@@ -72,37 +79,44 @@
     <div class="container">
       <div class="badge-row">
         <span class="badge crs">CRS: EPSG:5253 (TUREF / TM30)</span>
+        <span class="badge blue">Target Symbol: Blue Point (#2563EB)</span>
         <span class="badge">QGIS 3.22 – 4.99</span>
         <span class="badge">Qt5 &amp; Qt6 Compatible</span>
         <span class="badge">5 Languages (EN, TR, ZH, ES, ID)</span>
-        <span class="badge">Zero Hallucination Guaranteed</span>
       </div>
-      <h1>Green Space Accessibility &amp; Pedshed Analysis</h1>
-      <p style="margin:0;color:#cbd5e1;font-size:1.05rem;">
-        Topological road network Dijkstra, exact mid-street edge truncation, walkability isochrones,
-        pedshed coverage ratio, and p-median facility demand allocation.
+      <h1>Accessibility Analysis (v5.3.0)</h1>
+      <p style="margin:0;color:#cbd5e1;font-size:1.08rem;">
+        High-precision urban facility network accessibility, closest road-facing facade snapping,
+        non-overlapping walkability isochrones, pedshed efficiency ratios, and P-median capacity allocation.
       </p>
-      <p style="margin:0.5rem 0 0;font-size:0.9rem;color:#94a3b8;">
-        Author: <b>Baran Adsuna</b> &bull; Dokuz Eylül University, Department of Urban and Regional Planning
+      <p style="margin:0.5rem 0 0;font-size:0.92rem;color:#94a3b8;">
+        Author / Developer: <b>Baran Adsuna</b> (<a href="https://github.com/baranadsuna">@baranadsuna</a>) &bull;
+        Dokuz Eylül University, Department of Urban and Regional Planning
       </p>
+      <div class="anim-frame">
+        <img src="assets/hero_network_animation.svg" alt="Live Dijkstra &amp; Closest Road-Facing Facade Animation" style="width:100%;display:block;" />
+      </div>
     </div>
   </header>
 
   <main class="container">
     <section>
-      <h2>1. Overview &amp; Key Innovations</h2>
+      <h2>1. Closest Road-Facing Facade Snapping vs. Legacy Centroid Snapping</h2>
       <div class="panel">
         <p>
-          The <b>Green Space Accessibility &amp; Pedshed Analysis</b> plugin addresses the critical spatial equity
-          challenge in urban planning: evaluating whether residents can realistically access open and green spaces on foot.
-          Unlike conventional GIS buffer methods that measure straight-line (Euclidean) distance as the crow flies,
-          this tool navigates the actual street network graph, accounting for dead-ends, physical barriers,
-          and topological gaps.
+          Conventional network accessibility tools snap residential urban blocks from their geometric centroid $(x_c, y_c)$.
+          On elongated urban blocks bordered by multiple streets, the centroid may sit slightly closer to a side or rear street
+          that takes a long detour away from the target school or park&mdash;falsely classifying a block right across from the
+          facility as out-of-reach (`> 250 m`).
         </p>
         <p>
-          The system introduces <b>5-Language Runtime Internationalization</b> (English, Turkish, Chinese, Spanish, Indonesian),
-          enabling planners worldwide to run equity audits in their native language with synchronized bilingual reports.
+          <b>Accessibility Analysis v5.3.0</b> solves this by sampling every $5\text{ m}$ along all facades of each block/building
+          and connecting from the <b>road-facing facade that yields the shortest network walking distance to the target facility</b>,
+          while highlighting the Target Facility with a prominent <b>Blue Circle Point (`#2563eb`, size `5.6 mm`)</b> at the top of the layer tree.
         </p>
+        <div class="anim-frame">
+          <img src="assets/facade_snapping_animation.svg" alt="Closest Road-Facing Facade vs Legacy Centroid Snapping" style="width:100%;display:block;" />
+        </div>
       </div>
     </section>
 
@@ -110,63 +124,43 @@
       <h2>2. Mathematical &amp; Algorithmic Formulation</h2>
 
       <div class="panel">
-        <h3>2.1. Mid-Street Edge Truncation (Exact Walk Budget)</h3>
+        <h3>2.1. Closest Road-Facing Facade Shortest-Path Objective</h3>
         <p>
-          Traditional network tools either include an entire street segment if reachable or drop it completely.
-          Our PlanX-derived engine slices boundary edges $(u, v)$ with length $L_e$ at the exact metric walk threshold budget $T$:
+          Let $\mathcal{F}_i = \{f_1, f_2, \dots, f_m\} \subset \partial B_i$ denote the boundary vertices sampled at $5\text{ m}$ intervals
+          along the exterior perimeter of residential block $B_i$. The network walking distance to the set of target facilities $\mathcal{J}$ is:
         </p>
         <div class="math-block">
-          $$f_u = \max\left(0, \min\left(1, \frac{T - d(s, u)}{L_e}\right)\right), \quad f_v = \max\left(0, \min\left(1, \frac{T - d(s, v)}{L_e}\right)\right)$$
+          $$d_{\text{walk}}(B_i, \mathcal{J}) = \min_{f_k \in \mathcal{F}_i} \;\min_{e=(u,v) \in \mathcal{E}(f_k)} \Big( \min\big(d(u) + \alpha L_e,\; d(v) + (1-\alpha)L_e\big) + \gamma \cdot \|f_k - \pi_e(f_k)\|_2 \Big)$$
         </div>
-        <p>
-          When $f_u + f_v \ge 1.0$, the entire edge is traversed. When $f_u + f_v < 1.0$, partial segments
-          $[0, f_u]$ and $[1 - f_v, 1]$ are clipped and rendered, ensuring millimeter-precise pedestrian catchments.
-        </p>
       </div>
 
       <div class="panel">
-        <h3>2.2. Pedshed Walkability Coverage Ratio</h3>
+        <h3>2.2. Mid-Street Edge Truncation &amp; Non-Overlapping Isochrones</h3>
         <p>
-          Following Leslie et al. (2007), the <b>Pedshed Ratio</b> compares the actual pedestrian network catchment area
-          $A_{\text{network}}$ (ha) against the theoretical Euclidean circular buffer area $A_{\text{circle}} = \frac{\pi T^2}{10000}$ (ha):
+          Boundary street segments $(u, v)$ of length $L_e$ are clipped at the exact metric walk threshold budget $T_k$,
+          and outer isochrone rings subtract inner polygons so outer bands never obscure inner high-accessibility zones:
         </p>
         <div class="math-block">
-          $$\text{Pedshed Ratio} = \left(\frac{A_{\text{network}}}{A_{\text{circle}}}\right) \times 100\%$$
+          $$f_u = \max\left(0, \min\left(1, \frac{T_k - d(u)}{L_e}\right)\right), \quad f_v = \max\left(0, \min\left(1, \frac{T_k - d(v)}{L_e}\right)\right), \quad \Omega^{\text{ring}}_k = \Omega(T_k) \setminus \Omega(T_{k-1})$$
         </div>
-        <p>
-          <b>Evaluation Benchmarks:</b>
-        </p>
-        <ul>
-          <li><b>$\text{Pedshed} \ge 40\%$</b>: High Walkability &mdash; Well-connected grid or permeable urban fabric.</li>
-          <li><b>$\text{Pedshed} < 40\%$</b>: Isolated / Impaired Walkability &mdash; Presence of cul-de-sacs, railway/highway severance, or gated barriers.</li>
-        </ul>
       </div>
 
       <div class="panel">
-        <h3>2.3. P-Median Facility Demand Allocation</h3>
-        <p>
-          Based on Hakimi (1964) and Teitz &amp; Bart (1968), demand units $i \in \mathcal{I}$ (buildings with population weight $w_i$)
-          are partitioned to their nearest facility $j^* \in \mathcal{J}$:
-        </p>
+        <h3>2.3. Pedshed Walkability Coverage Ratio &amp; P-Median Demand Allocation</h3>
         <div class="math-block">
-          $$j^*(i) = \arg\min_{j \in \mathcal{J}} d_{\text{network}}(i, j)$$
-          $$W_j = \sum_{i: j^*(i) = j} w_i, \quad \bar{d}_j = \frac{1}{|\mathcal{A}_j|} \sum_{i \in \mathcal{A}_j} d_{\text{network}}(i, j)$$
+          $$\text{Pedshed}(T) = \left(\frac{A_{\text{network}}(T)}{\pi T^2}\right) \times 100\%, \qquad j^*(i) = \arg\min_{j \in \mathcal{J}} d_{\text{walk}}(B_i, j), \qquad W_j = \sum_{i: j^*(i) = j} w_i$$
         </div>
-        <p>
-          This enables planners to immediately detect overcrowded parks under severe residential demand versus under-served residential pockets.
-        </p>
       </div>
     </section>
 
     <section>
       <h2>3. Verified Academic References (Zero-Hallucination Standard)</h2>
       <div class="panel">
-        <p>Every citation has been verified via the repository's Crossref API validator:</p>
         <table>
           <thead>
             <tr>
               <th>Citation</th>
-              <th>Topic</th>
+              <th>Methodological Role</th>
               <th>Verified DOI</th>
             </tr>
           </thead>
@@ -178,22 +172,22 @@
             </tr>
             <tr>
               <td>Teitz, M. B., &amp; Bart, P. (1968). <i>Heuristic Methods for Estimating the Generalized Vertex Median of a Weighted Graph</i>. Operations Research, 16(5), 955–961.</td>
-              <td>Facility Allocation Heuristic</td>
+              <td>Facility Demand Allocation</td>
               <td><a href="https://doi.org/10.1287/opre.16.5.955" target="_blank" class="doi-badge">10.1287/opre.16.5.955</a></td>
             </tr>
             <tr>
               <td>Talen, E. (1997). <i>The Social Equity of Urban Service Distribution: An Exploration of Park Access in Pueblo, Colorado, and Macon, Georgia</i>. Urban Geography, 18(6), 521–541.</td>
-              <td>Park Accessibility Equity</td>
+              <td>Urban Facility Equity</td>
               <td><a href="https://doi.org/10.2747/0272-3638.18.6.521" target="_blank" class="doi-badge">10.2747/0272-3638.18.6.521</a></td>
             </tr>
             <tr>
               <td>Leslie, E., et al. (2007). <i>Walkability of local communities: Using geographic information systems to objectively assess relevant environmental attributes</i>. Health &amp; Place, 13(1), 111–122.</td>
-              <td>Pedshed Ratio &amp; Walkability</td>
+              <td>Pedshed Walkability Ratio</td>
               <td><a href="https://doi.org/10.1016/j.healthplace.2005.11.001" target="_blank" class="doi-badge">10.1016/j.healthplace.2005.11.001</a></td>
             </tr>
             <tr>
               <td>Dijkstra, E. W. (1959). <i>A note on two problems in connexion with graphs</i>. Numerische Mathematik, 1(1), 269–271.</td>
-              <td>Shortest-Path Traversal</td>
+              <td>Multi-Source Shortest Path</td>
               <td><a href="https://doi.org/10.1007/bf01386390" target="_blank" class="doi-badge">10.1007/bf01386390</a></td>
             </tr>
           </tbody>
@@ -202,24 +196,14 @@
     </section>
 
     <section>
-      <h2>4. User Guide &amp; Dockable GUI Interface</h2>
+      <h2>4. 100% English Default Interface &amp; 5-Language Selector</h2>
       <div class="panel">
-        <p>
-          The plugin is built as a native <b>QgsDockWidget</b>, allowing urban planners to dock the analysis panel seamlessly to the
-          <b>Right</b> or <b>Left</b> of the QGIS canvas, tab it alongside the Layers panel, or float it across dual monitors.
-        </p>
-        <div style="text-align:center; margin: 1.5rem 0;">
-          <img src="assets/green_access_dock_gui.png" alt="Dockable GUI Panel" style="max-width: 440px; width: 100%; border-radius: 10px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5);" />
-          <p style="color:#94a3b8; font-size:0.85rem; margin-top:0.5rem;"><i>Figure 1: High-aesthetic dockable interface with emerald banner, 5-language selector, and responsive cards.</i></p>
+        <div style="text-align:center; margin: 1.2rem 0;">
+          <img src="assets/green_access_gui.png" alt="Accessibility Analysis v5.3.0 English GUI" style="max-width: 410px; width: 100%; border-radius: 10px; border: 1px solid #334155; box-shadow: 0 10px 25px rgba(0,0,0,0.5);" />
+          <p style="color:#94a3b8; font-size:0.86rem; margin-top:0.5rem;">
+            <i>Figure 1: Accessibility Analysis v5.3.0 default English interface with 18px low-threshold dock/float controls and 5-language selector (EN, TR, ZH, ES, ID).</i>
+          </p>
         </div>
-        <ol>
-          <li><b>Dock Anywhere:</b> Drag the dock widget header to attach to the left or right dock bar of QGIS, or double-click to float.</li>
-          <li><b>Select Language:</b> Use the header dropdown to toggle between English, Türkçe, 简体中文, Español, or Bahasa Indonesia in real time.</li>
-          <li><b>Set Thresholds:</b> Enter comma-separated distance budgets (e.g. <code>300, 500, 1000</code> for urban parks, or <code>400, 800, 1200</code> for 5-10-15 min walks).</li>
-          <li><b>Gap Healing:</b> Leave gap tolerance at 15 m to bridge digitized dead-end streets and T-junctions automatically.</li>
-          <li><b>Execute:</b> Click <b>Start Analysis</b>. The background task executes safely without freezing QGIS.</li>
-          <li><b>Inspect Results:</b> Review the building classification layer, mid-street service lines, walkability isochrone polygons, benchmark circles, and the detailed HTML audit report.</li>
-        </ol>
       </div>
     </section>
   </main>

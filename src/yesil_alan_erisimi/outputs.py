@@ -327,7 +327,7 @@ def build_layers(
                 lyr.setRenderer(QgsSingleSymbolRenderer(sym))
                 add(lyr)
 
-    # 5. Facility Allocation & Pedshed Summary Layer
+    # 5. Target Facility Allocation & Pedshed Summary Layer (Prominent Blue Point Symbol)
     park_geoms = result.get("park_geoms", {})
     allocations = result.get("allocations", {})
     if park_geoms and allocations:
@@ -361,37 +361,44 @@ def build_layers(
                     None if mean_d is None else round(mean_d, 1),
                     status_str,
                 ]
+                # Always generate a prominent Blue Point symbol at the facility centroid
+                c = geom.centroid()
+                if c and not c.isEmpty():
+                    pt = c.asPoint()
+                    pt_rows.append((_point(pt.x(), pt.y()), list(row_attrs)))
                 if geom.area() > 0:
-                    poly_rows.append((_multi(QgsGeometry(geom)), row_attrs))
-                else:
-                    c = geom.centroid()
-                    if c and not c.isEmpty():
-                        pt = c.asPoint()
-                        pt_rows.append((_point(pt.x(), pt.y()), row_attrs))
+                    poly_rows.append((_multi(QgsGeometry(geom)), list(row_attrs)))
 
+        # Optional translucent Blue Polygon Footprint when target facility is a polygon
         if poly_rows:
-            lyr = _new_layer("MultiPolygon", layer_name, out_crs, fields)
-            _fill(lyr, poly_rows, ct)
-            sym = QgsFillSymbol.createSimple(
-                {"color": "#ea580c", "outline_color": "#7c2d12", "outline_width": "0.6"}
+            poly_lyr = _new_layer("MultiPolygon", f"{layer_name} (Polygon)", out_crs, fields)
+            _fill(poly_lyr, poly_rows, ct)
+            sym_poly = QgsFillSymbol.createSimple(
+                {"color": "#3b82f6", "outline_color": "#1d4ed8", "outline_width": "0.6"}
             )
-            sym.setOpacity(0.55)
-            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-            add(lyr)
-        elif pt_rows:
-            lyr = _new_layer("Point", layer_name, out_crs, fields)
-            _fill(lyr, pt_rows, ct)
-            sym = QgsMarkerSymbol.createSimple(
+            sym_poly.setOpacity(0.42)
+            poly_lyr.setRenderer(QgsSingleSymbolRenderer(sym_poly))
+            project.addMapLayer(poly_lyr, False)
+            group.insertLayer(0, poly_lyr)
+            created.insert(0, poly_lyr.name())
+
+        # Prominent, slightly larger Blue Point Symbol (#2563eb) placed at the very top of the group
+        if pt_rows:
+            pt_lyr = _new_layer("Point", layer_name, out_crs, fields)
+            _fill(pt_lyr, pt_rows, ct)
+            sym_pt = QgsMarkerSymbol.createSimple(
                 {
-                    "name": "star",
-                    "color": "#ea580c",
-                    "size": "4.5",
+                    "name": "circle",
+                    "color": "#2563eb",
+                    "size": "5.6",
                     "outline_color": "#ffffff",
-                    "outline_width": "0.5",
+                    "outline_width": "0.8",
                 }
             )
-            lyr.setRenderer(QgsSingleSymbolRenderer(sym))
-            add(lyr)
+            pt_lyr.setRenderer(QgsSingleSymbolRenderer(sym_pt))
+            project.addMapLayer(pt_lyr, False)
+            group.insertLayer(0, pt_lyr)
+            created.insert(0, pt_lyr.name())
 
     # 6. Audit & Debug Layers (Facade Connectors, Bridges & Access Points)
     if params.get("add_debug", True):
@@ -463,11 +470,11 @@ def build_layers(
                 QgsSingleSymbolRenderer(
                     QgsMarkerSymbol.createSimple(
                         {
-                            "name": "diamond",
-                            "color": "#ea580c",
-                            "size": "3.0",
-                            "outline_color": "white",
-                            "outline_width": "0.4",
+                            "name": "circle",
+                            "color": "#3b82f6",
+                            "size": "3.2",
+                            "outline_color": "#ffffff",
+                            "outline_width": "0.5",
                         }
                     )
                 )

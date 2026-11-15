@@ -52,8 +52,8 @@ from .analysis_task import AnalysisTask, choose_calc_crs, log
 from .compat import align_right, dock_left, dock_left_right, dock_none, dock_right, layer_filter
 from .outputs import build_layers
 
-PLUGIN_VERSION = "5.2.0"
-SETTINGS_PREFIX = "UrbanAccessibilityAnalysis_v52/"
+PLUGIN_VERSION = "5.3.0"
+SETTINGS_PREFIX = "UrbanAccessibilityAnalysis_v53/"
 MAX_THRESHOLDS = 10
 SNAP_EDGE_MARGIN_PX = 18  # Only snap when dragged within 18px of extreme outer left/right edge
 
@@ -280,7 +280,7 @@ class GreenAccessDockWidget(QDockWidget):
         self._calc_crs = None
         self._crs_note = ""
         self._params: Optional[dict] = None
-        self._current_lang = "tr"
+        self._current_lang = "en"
         self._plugin_dir = os.path.dirname(os.path.abspath(__file__))
 
         self._build_ui()
@@ -382,9 +382,9 @@ class GreenAccessDockWidget(QDockWidget):
 
         title_vbox = QVBoxLayout()
         title_vbox.setSpacing(1)
-        self.lbl_app_title = QLabel("Erişim Analizi")
+        self.lbl_app_title = QLabel("Accessibility Analysis")
         self.lbl_app_title.setObjectName("appTitle")
-        self.lbl_app_subtitle = QLabel("Ağ Tabanlı Donatı ve Cephe Erişimi")
+        self.lbl_app_subtitle = QLabel("Network Facility & Facade Accessibility Suite")
         self.lbl_app_subtitle.setObjectName("appSubtitle")
         self.lbl_app_subtitle.setWordWrap(True)
         title_vbox.addWidget(self.lbl_app_title)
@@ -416,15 +416,15 @@ class GreenAccessDockWidget(QDockWidget):
         badge_row.addWidget(self.badge_crs)
         badge_row.addStretch(1)
 
-        self.btn_dock_l = QPushButton("⬅ Sol")
+        self.btn_dock_l = QPushButton("⬅ Left")
         self.btn_dock_l.setObjectName("dockBtn")
         self.btn_dock_l.clicked.connect(self._dock_to_left)
 
-        self.btn_dock_f = QPushButton("🪟 Serbest")
+        self.btn_dock_f = QPushButton("🪟 Float")
         self.btn_dock_f.setObjectName("dockBtn")
         self.btn_dock_f.clicked.connect(self._undock_free)
 
-        self.btn_dock_r = QPushButton("Sağ ➡")
+        self.btn_dock_r = QPushButton("Right ➡")
         self.btn_dock_r.setObjectName("dockBtn")
         self.btn_dock_r.clicked.connect(self._dock_to_right)
 
@@ -449,9 +449,9 @@ class GreenAccessDockWidget(QDockWidget):
         self.tab_adv = self._create_advanced_tab()
         self.tab_rep = self._create_report_tab()
 
-        self.tabs.addTab(self.tab_data, "Veri")
-        self.tabs.addTab(self.tab_adv, "Ayarlar")
-        self.tabs.addTab(self.tab_rep, "Rapor")
+        self.tabs.addTab(self.tab_data, "Data")
+        self.tabs.addTab(self.tab_adv, "Settings")
+        self.tabs.addTab(self.tab_rep, "Report")
 
         self.scroll_area.setWidget(self.tabs)
         root.addWidget(self.scroll_area, 1)
@@ -461,7 +461,7 @@ class GreenAccessDockWidget(QDockWidget):
         self.progress.setRange(0, 100)
         root.addWidget(self.progress)
 
-        self.lbl_status = QLabel("Hazır")
+        self.lbl_status = QLabel("Ready")
         self.lbl_status.setObjectName("statusHint")
         root.addWidget(self.lbl_status)
 
@@ -817,7 +817,7 @@ class GreenAccessDockWidget(QDockWidget):
     def _load_settings(self) -> None:
         s = QSettings()
         g = lambda k, d: s.value(SETTINGS_PREFIX + k, d)
-        saved_lang = str(g("language", "tr"))
+        saved_lang = str(g("language", "en"))
         idx = self.cmb_lang.findData(saved_lang)
         if idx >= 0:
             self.cmb_lang.setCurrentIndex(idx)

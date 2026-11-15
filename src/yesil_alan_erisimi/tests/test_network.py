@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""Çekirdek (QGIS'siz) birim testleri:  python -m unittest discover -s tests"""
+"""Core headless unit tests for RoadNetwork and facade-based accessibility: python -m unittest discover -s tests"""
 import os
 import sys
 import unittest
@@ -30,18 +30,18 @@ class TestNetwork(unittest.TestCase):
     def test_no_noding_means_no_junction(self):
         net = N.RoadNetwork()
         net.add_lines(grid_roads(), node_crossings=False)
-        self.assertGreater(net.component_count(), 1)  # kesişimde düğüm yok
+        self.assertGreater(net.component_count(), 1)  # no junction node at crossing
 
     def test_mid_edge_source_exact(self):
         net = N.RoadNetwork()
         net.add_lines([(1, [(0, 0), (1000, 0)])])
-        src = net.add_source_point(500, 30, 100)       # ortadan, 30 m ofset
+        src = net.add_source_point(500, 30, 100)       # mid-edge, 30 m lateral offset
         self.assertAlmostEqual(src[1], 30.0)
         dist, lab = net.dijkstra([(src[0], 0.0, "P")], 1000)
         c, _, _ = net.evaluate_point(700, 0, dist, lab, 10)
         self.assertAlmostEqual(c, 200.0, places=3)
         pieces, tot = net.service_pieces(dist, lab, [100])
-        self.assertAlmostEqual(tot[100], 200.0, places=3)  # 100 sola + 100 sağa
+        self.assertAlmostEqual(tot[100], 200.0, places=3)  # 100 left + 100 right
 
     def test_gap_node_bridge(self):
         net = N.RoadNetwork()
@@ -70,7 +70,7 @@ class TestNetwork(unittest.TestCase):
         self.assertAlmostEqual(c, 88 + 12 + 100, places=3)
 
     def test_only_disconnected_avoids_shortcut(self):
-        # U biçimli bağlı ağ: iki dikey kol uçları 10 m arayla, ama aynı bileşende
+        # U-shaped connected network: two vertical arms 10 m apart, but in same component
         roads = [(1, [(0, 0), (0, 100), (10, 100)]), (2, [(10, 100), (10, 0)])]
         a = N.RoadNetwork(); a.add_lines(roads)
         self.assertEqual(a.heal_gaps(15.0, True), (0, 0))
@@ -96,7 +96,7 @@ class TestNetwork(unittest.TestCase):
         by = {b[0]: b for b in r["buildings"]}
         self.assertAlmostEqual(by[1][4], 200.0, places=3)
         self.assertIsNone(by[2][4])           # 800 m > 500
-        self.assertIsNone(by[3][6])           # ağa bağlanamadı
+        self.assertIsNone(by[3][6])           # unsnapped to road network
         st = r["stats"]
         self.assertEqual(st["buildings_unsnapped"], 1)
         self.assertEqual(st["per_threshold"][250]["buildings"], 1)

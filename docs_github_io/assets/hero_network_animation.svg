@@ -1,0 +1,296 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 440" width="100%" height="100%">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#060b13"/>
+      <stop offset="50%" stop-color="#0b1322"/>
+      <stop offset="100%" stop-color="#071a14"/>
+    </linearGradient>
+    <linearGradient id="hudGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a" stop-opacity="0.92"/>
+      <stop offset="100%" stop-color="#09101d" stop-opacity="0.96"/>
+    </linearGradient>
+    <radialGradient id="iso250" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#22c55e" stop-opacity="0.34"/>
+      <stop offset="75%" stop-color="#16a34a" stop-opacity="0.22"/>
+      <stop offset="100%" stop-color="#16a34a" stop-opacity="0.0"/>
+    </radialGradient>
+    <radialGradient id="iso500" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#eab308" stop-opacity="0.16"/>
+      <stop offset="80%" stop-color="#ca8a04" stop-opacity="0.12"/>
+      <stop offset="100%" stop-color="#eab308" stop-opacity="0.0"/>
+    </radialGradient>
+    <filter id="glowGreen" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="4" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="glowBlue" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="5" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <style>
+      .font-ui { font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif; }
+      .font-mono { font-family: 'Cascadia Code', 'Fira Code', Consolas, monospace; }
+      .grid-line { stroke: #1e293b; stroke-width: 1; stroke-dasharray: 3 6; opacity: 0.45; }
+      .road-base { stroke: #334155; stroke-width: 5.5; stroke-linecap: round; fill: none; }
+      .road-red { stroke: #ef4444; stroke-width: 3.5; stroke-linecap: round; fill: none; opacity: 0.55; }
+      .road-amber {
+        stroke: #eab308; stroke-width: 4.5; stroke-linecap: round; fill: none;
+        stroke-dasharray: 260; stroke-dashoffset: 260;
+        animation: pulseAmber 6s infinite ease-out;
+      }
+      .road-green {
+        stroke: #22c55e; stroke-width: 5.5; stroke-linecap: round; fill: none;
+        filter: url(#glowGreen);
+        stroke-dasharray: 240; stroke-dashoffset: 240;
+        animation: pulseGreen 6s infinite ease-out;
+      }
+      .block-green {
+        fill: #16a34a; stroke: #4ade80; stroke-width: 1.6;
+        animation: blockLightGreen 6s infinite ease-in-out;
+      }
+      .block-amber {
+        fill: #ca8a04; stroke: #facc15; stroke-width: 1.3;
+        animation: blockLightAmber 6s infinite ease-in-out;
+      }
+      .block-red {
+        fill: #991b1b; stroke: #f87171; stroke-width: 1.1; opacity: 0.55;
+      }
+      .facade-conn {
+        stroke: #4ade80; stroke-width: 2; stroke-dasharray: 4 3;
+        animation: connFade 6s infinite ease-in-out;
+      }
+      @keyframes pulseGreen {
+        0%, 8% { stroke-dashoffset: 240; opacity: 0.2; }
+        35%, 85% { stroke-dashoffset: 0; opacity: 1; }
+        100% { stroke-dashoffset: 0; opacity: 0.3; }
+      }
+      @keyframes pulseAmber {
+        0%, 22% { stroke-dashoffset: 260; opacity: 0; }
+        55%, 85% { stroke-dashoffset: 0; opacity: 0.92; }
+        100% { stroke-dashoffset: 0; opacity: 0.2; }
+      }
+      @keyframes blockLightGreen {
+        0%, 18% { fill-opacity: 0.12; stroke-opacity: 0.35; }
+        38%, 88% { fill-opacity: 0.68; stroke-opacity: 1; }
+        100% { fill-opacity: 0.18; stroke-opacity: 0.4; }
+      }
+      @keyframes blockLightAmber {
+        0%, 35% { fill-opacity: 0.10; stroke-opacity: 0.3; }
+        58%, 88% { fill-opacity: 0.52; stroke-opacity: 0.95; }
+        100% { fill-opacity: 0.14; stroke-opacity: 0.3; }
+      }
+      @keyframes connFade {
+        0%, 20% { opacity: 0; }
+        40%, 88% { opacity: 1; }
+        100% { opacity: 0.2; }
+      }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="960" height="440" rx="16" fill="url(#bgGrad)" stroke="#1e293b" stroke-width="2"/>
+
+  <!-- Subtle Coordinate Grid (EPSG:5253) -->
+  <g>
+    <line x1="60" y1="0" x2="60" y2="440" class="grid-line"/>
+    <line x1="160" y1="0" x2="160" y2="440" class="grid-line"/>
+    <line x1="260" y1="0" x2="260" y2="440" class="grid-line"/>
+    <line x1="360" y1="0" x2="360" y2="440" class="grid-line"/>
+    <line x1="460" y1="0" x2="460" y2="440" class="grid-line"/>
+    <line x1="560" y1="0" x2="560" y2="440" class="grid-line"/>
+    <line x1="0" y1="80" x2="610" y2="80" class="grid-line"/>
+    <line x1="0" y1="170" x2="610" y2="170" class="grid-line"/>
+    <line x1="0" y1="260" x2="610" y2="260" class="grid-line"/>
+    <line x1="0" y1="350" x2="610" y2="350" class="grid-line"/>
+  </g>
+
+  <!-- Euclidean Benchmark Dashed Circles -->
+  <circle cx="310" cy="220" r="185" fill="url(#iso500)" stroke="#eab308" stroke-width="1.2" stroke-dasharray="6 5" opacity="0.65"/>
+  <circle cx="310" cy="220" r="115" fill="url(#iso250)" stroke="#22c55e" stroke-width="1.5" stroke-dasharray="6 4" opacity="0.85">
+    <animate attributeName="r" values="110;118;110" dur="4s" repeatCount="indefinite"/>
+  </circle>
+
+  <!-- Base Urban Road Network -->
+  <g>
+    <!-- Horizontal streets -->
+    <path d="M 40 80 L 570 80" class="road-base"/>
+    <path d="M 40 155 L 570 155" class="road-base"/>
+    <path d="M 40 220 L 570 220" class="road-base"/>
+    <path d="M 40 290 L 570 290" class="road-base"/>
+    <path d="M 40 365 L 570 365" class="road-base"/>
+    <!-- Vertical & diagonal streets -->
+    <path d="M 95 35 L 95 405" class="road-base"/>
+    <path d="M 195 35 L 195 405" class="road-base"/>
+    <path d="M 310 35 L 310 405" class="road-base"/>
+    <path d="M 425 35 L 425 405" class="road-base"/>
+    <path d="M 525 35 L 525 405" class="road-base"/>
+    <!-- Outer red (>500m) streets -->
+    <path d="M 40 80 L 95 80 L 95 365 L 40 365" class="road-red"/>
+    <path d="M 525 80 L 570 80 M 525 365 L 570 365 M 525 80 L 525 365" class="road-red"/>
+  </g>
+
+  <!-- Animated Amber 250-500m Service Roads -->
+  <g>
+    <path d="M 195 155 L 95 155 L 95 80 L 310 80 L 425 80 L 525 80" class="road-amber"/>
+    <path d="M 195 220 L 95 220 L 95 290 L 195 290" class="road-amber"/>
+    <path d="M 425 220 L 525 220 L 525 155 L 425 155" class="road-amber"/>
+    <path d="M 195 290 L 195 365 L 425 365 L 425 290 L 525 290" class="road-amber"/>
+  </g>
+
+  <!-- Animated Glowing Green 0-250m Dijkstra Service Wave -->
+  <g>
+    <path d="M 310 220 L 195 220 L 195 155 L 310 155 L 425 155 L 425 220 Z" class="road-green"/>
+    <path d="M 310 220 L 310 100" class="road-green"/>
+    <path d="M 310 220 L 310 335" class="road-green"/>
+    <path d="M 195 220 L 195 290 L 425 290 L 425 220" class="road-green"/>
+    <path d="M 195 220 L 145 220" class="road-green"/>
+    <path d="M 425 220 L 475 220" class="road-green"/>
+  </g>
+
+  <!-- Residential Urban Blocks (Colored by Facade Accessibility) -->
+  <!-- 0-250m GREEN BLOCKS -->
+  <rect x="212" y="168" width="82" height="39" rx="4" class="block-green"/>
+  <rect x="326" y="168" width="82" height="39" rx="4" class="block-green"/>
+  <rect x="212" y="233" width="82" height="44" rx="4" class="block-green"/>
+  <rect x="326" y="233" width="82" height="44" rx="4" class="block-green"/>
+  <rect x="212" y="95" width="82" height="46" rx="4" class="block-green"/>
+  <rect x="326" y="95" width="82" height="46" rx="4" class="block-green"/>
+
+  <!-- 250-500m AMBER BLOCKS -->
+  <rect x="110" y="95" width="70" height="46" rx="4" class="block-amber"/>
+  <rect x="110" y="168" width="70" height="39" rx="4" class="block-amber"/>
+  <rect x="110" y="233" width="70" height="44" rx="4" class="block-amber"/>
+  <rect x="440" y="95" width="70" height="46" rx="4" class="block-amber"/>
+  <rect x="440" y="168" width="70" height="39" rx="4" class="block-amber"/>
+  <rect x="440" y="233" width="70" height="44" rx="4" class="block-amber"/>
+  <rect x="212" y="304" width="82" height="46" rx="4" class="block-amber"/>
+  <rect x="326" y="304" width="82" height="46" rx="4" class="block-amber"/>
+
+  <!-- >500m RED BLOCKS -->
+  <rect x="48" y="95" width="34" height="46" rx="3" class="block-red"/>
+  <rect x="48" y="233" width="34" height="44" rx="3" class="block-red"/>
+  <rect x="110" y="304" width="70" height="46" rx="4" class="block-red"/>
+  <rect x="440" y="304" width="70" height="46" rx="4" class="block-red"/>
+
+  <!-- Closest Road-Facing Facade Connectors (Animated Green Dotted Lines + Points) -->
+  <g>
+    <!-- Block 1 facade connector to inner green street -->
+    <line x1="253" y1="207" x2="253" y2="220" class="facade-conn"/>
+    <circle cx="253" cy="207" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+    <!-- Block 2 facade connector -->
+    <line x1="367" y1="207" x2="367" y2="220" class="facade-conn"/>
+    <circle cx="367" cy="207" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+    <!-- Block 3 facade connector -->
+    <line x1="253" y1="233" x2="253" y2="220" class="facade-conn"/>
+    <circle cx="253" cy="233" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+    <!-- Block 4 facade connector -->
+    <line x1="367" y1="233" x2="367" y2="220" class="facade-conn"/>
+    <circle cx="367" cy="233" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+    <!-- Upper blocks connecting from their bottom/side road-facing facades -->
+    <line x1="294" y1="118" x2="310" y2="118" class="facade-conn"/>
+    <circle cx="294" cy="118" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+    <line x1="326" y1="118" x2="310" y2="118" class="facade-conn"/>
+    <circle cx="326" cy="118" r="3.5" fill="#4ade80" stroke="#064e3b" stroke-width="1"/>
+  </g>
+
+  <!-- Moving Green Dijkstra Photons Along Streets -->
+  <circle r="4.5" fill="#86efac" filter="url(#glowGreen)">
+    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 310 220 L 195 220 L 195 155 L 110 155"/>
+  </circle>
+  <circle r="4.5" fill="#86efac" filter="url(#glowGreen)">
+    <animateMotion dur="2.5s" repeatCount="indefinite" path="M 310 220 L 425 220 L 425 290 L 310 290"/>
+  </circle>
+  <circle r="4.5" fill="#86efac" filter="url(#glowGreen)">
+    <animateMotion dur="2.2s" repeatCount="indefinite" path="M 310 220 L 310 80 L 425 80"/>
+  </circle>
+
+  <!-- PROMINENT BLUE TARGET FACILITY SYMBOL (Center #2563eb with White Outline & Pulse) -->
+  <g transform="translate(310, 220)">
+    <!-- Footprint polygon under blue marker -->
+    <rect x="-16" y="-16" width="32" height="32" rx="6" fill="#3b82f6" fill-opacity="0.35" stroke="#60a5fa" stroke-width="1.5"/>
+    <!-- Expanding sonar wave -->
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#3b82f6" stroke-width="2.5">
+      <animate attributeName="r" values="9;34" dur="2.2s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.95;0" dur="2.2s" repeatCount="indefinite"/>
+    </circle>
+    <!-- Prominent Large Blue Circle Point Symbol (#2563eb + White Outline) -->
+    <circle cx="0" cy="0" r="10.5" fill="#2563eb" stroke="#ffffff" stroke-width="2.8" filter="url(#glowBlue)"/>
+    <circle cx="0" cy="0" r="3.5" fill="#93c5fd"/>
+  </g>
+
+  <!-- Map Canvas Top Title Banner -->
+  <rect x="20" y="16" width="445" height="38" rx="9" fill="#0f172a" fill-opacity="0.88" stroke="#22c55e" stroke-width="1.2"/>
+  <circle cx="38" cy="35" r="5.5" fill="#22c55e">
+    <animate attributeName="opacity" values="1;0.3;1" dur="1.4s" repeatCount="indefinite"/>
+  </circle>
+  <text x="52" y="33" fill="#f8fafc" font-size="13" font-weight="700" class="font-ui">ACCESSIBILITY ANALYSIS — LIVE DIJKSTRA ENGINE</text>
+  <text x="52" y="47" fill="#86efac" font-size="10" class="font-mono">Multi-Source Shortest Path • Closest Facade Snapping • EPSG:5253</text>
+
+  <!-- Bottom Map Legend Pill -->
+  <rect x="20" y="390" width="560" height="34" rx="8" fill="#0f172a" fill-opacity="0.9" stroke="#334155" stroke-width="1"/>
+  <circle cx="38" cy="407" r="6.5" fill="#2563eb" stroke="#ffffff" stroke-width="1.8"/>
+  <text x="50" y="411" fill="#e2e8f0" font-size="11" font-weight="600" class="font-ui">Target Facility</text>
+
+  <rect x="148" y="400" width="14" height="14" rx="3" fill="#16a34a" stroke="#4ade80" stroke-width="1"/>
+  <text x="168" y="411" fill="#86efac" font-size="11" font-weight="600" class="font-ui">0–250 m (High Access)</text>
+
+  <rect x="305" y="400" width="14" height="14" rx="3" fill="#ca8a04" stroke="#facc15" stroke-width="1"/>
+  <text x="325" y="411" fill="#fde047" font-size="11" font-weight="600" class="font-ui">250–500 m (Moderate)</text>
+
+  <rect x="458" y="400" width="14" height="14" rx="3" fill="#991b1b" stroke="#f87171" stroke-width="1"/>
+  <text x="478" y="411" fill="#fca5a5" font-size="11" font-weight="600" class="font-ui">&gt; 500 m (Barrier)</text>
+
+  <!-- Right HUD Telemetry Panel -->
+  <rect x="605" y="16" width="338" height="408" rx="12" fill="url(#hudGrad)" stroke="#1e293b" stroke-width="1.5"/>
+  <text x="625" y="44" fill="#4ade80" font-size="11" font-weight="700" letter-spacing="1.2" class="font-mono">URBAN NETWORK TELEMETRY • v5.3.0</text>
+  <text x="625" y="66" fill="#ffffff" font-size="17" font-weight="800" class="font-ui">Accessibility Analysis</text>
+  <text x="625" y="84" fill="#94a3b8" font-size="11.5" class="font-ui">Schools • Green Spaces • Healthcare • Transit</text>
+
+  <!-- Card 1: Target Facility Blue Symbol -->
+  <rect x="622" y="98" width="304" height="62" rx="8" fill="#111c30" stroke="#2563eb" stroke-width="1.2"/>
+  <circle cx="644" cy="129" r="9" fill="#2563eb" stroke="#ffffff" stroke-width="2.2"/>
+  <text x="664" y="122" fill="#93c5fd" font-size="11.5" font-weight="700" class="font-ui">Prominent Blue Target Facility Marker</text>
+  <text x="664" y="139" fill="#cbd5e1" font-size="10.5" class="font-ui">Multi-street perimeter entry (&lt;= 35 m frontage)</text>
+  <text x="664" y="153" fill="#60a5fa" font-size="10" class="font-mono">Symbol: #2563EB Circle (5.6 mm) • Top Layer</text>
+
+  <!-- Card 2: Closest Road-Facing Facade -->
+  <rect x="622" y="170" width="304" height="66" rx="8" fill="#0c241b" stroke="#22c55e" stroke-width="1.2"/>
+  <text x="636" y="191" fill="#4ade80" font-size="11.5" font-weight="700" class="font-ui">Closest Road-Facing Facade Snapping</text>
+  <text x="636" y="208" fill="#d1fae5" font-size="10.5" class="font-ui">Evaluates every 5 m facade point along block</text>
+  <text x="636" y="223" fill="#86efac" font-size="10" class="font-mono">cost = min(d_road(facade_i) + w_offset)</text>
+
+  <!-- Card 3: Live Pedshed & Coverage Progress -->
+  <rect x="622" y="246" width="304" height="86" rx="8" fill="#131c2e" stroke="#334155" stroke-width="1"/>
+  <text x="636" y="267" fill="#f8fafc" font-size="11.5" font-weight="700" class="font-ui">Walkability &amp; Pedshed Efficiency</text>
+  <text x="636" y="286" fill="#86efac" font-size="11" font-weight="700" class="font-mono">0–250 m Reached Blocks</text>
+  <text x="868" y="286" fill="#4ade80" font-size="11" font-weight="700" class="font-mono">78.4%</text>
+  <rect x="636" y="293" width="274" height="7" rx="3.5" fill="#1e293b"/>
+  <rect x="636" y="293" width="215" height="7" rx="3.5" fill="#22c55e">
+    <animate attributeName="width" values="40;215;215;40" dur="6s" repeatCount="indefinite"/>
+  </rect>
+  <text x="636" y="319" fill="#fde047" font-size="10.5" class="font-mono">Pedshed Ratio: 74.8% (High Connectivity)</text>
+
+  <!-- Card 4: Stack & Language Badges -->
+  <rect x="622" y="342" width="304" height="68" rx="8" fill="#131c2e" stroke="#334155" stroke-width="1"/>
+  <text x="636" y="362" fill="#e2e8f0" font-size="11" font-weight="700" class="font-ui">QGIS 3 &amp; QGIS 4 Ready • 5-Language UI</text>
+  <g transform="translate(636, 372)" class="font-mono" font-size="10" font-weight="700">
+    <rect x="0" y="0" width="44" height="22" rx="5" fill="#16a34a" fill-opacity="0.25" stroke="#22c55e"/>
+    <text x="10" y="15" fill="#86efac">EN*</text>
+    <rect x="52" y="0" width="40" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
+    <text x="64" y="15" fill="#cbd5e1">TR</text>
+    <rect x="100" y="0" width="40" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
+    <text x="112" y="15" fill="#cbd5e1">ZH</text>
+    <rect x="148" y="0" width="40" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
+    <text x="160" y="15" fill="#cbd5e1">ES</text>
+    <rect x="196" y="0" width="40" height="22" rx="5" fill="#1e293b" stroke="#475569"/>
+    <text x="208" y="15" fill="#cbd5e1">ID</text>
+    <rect x="244" y="0" width="36" height="22" rx="5" fill="#1e3a8a" stroke="#3b82f6"/>
+    <text x="251" y="15" fill="#93c5fd">Qt6</text>
+  </g>
+</svg>

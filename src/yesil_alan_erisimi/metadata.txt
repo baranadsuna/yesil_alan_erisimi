@@ -1,19 +1,21 @@
 [general]
-name=Erişim Analizi (Accessibility Analysis)
+name=Accessibility Analysis
 qgisMinimumVersion=3.22
 qgisMaximumVersion=4.99
 supportsQt6=True
-description=Evaluates urban facility accessibility (schools, parks, health, transit) via road network Dijkstra, closest road-facing facade connections, walkability isochrones, pedshed ratio, and p-median load in EPSG:5253 with 5-language support (TR, EN, ZH, ES, ID).
-about=Calculates true street-network walking distances from residential blocks and buildings (connecting from the facade closest to the road leading to the target facility) to any urban facility (schools, green spaces, health centers, stations). Produces colored block/building polygons, mid-street clipped service area lines, non-overlapping walkability isochrones, Euclidean benchmark circles, pedshed ratios, and p-median demand allocation. Features automatic planar road noding, T-junction gap healing, low-threshold dock/float controls, and 5-language support.
-version=5.2.0
+description=High-precision urban accessibility, 15-minute city, walkability isochrone, pedshed, and service area network analyzer for schools, parks, healthcare, transit stops, and public facilities. Features closest road-facing facade snapping, automatic T-junction topology healing, P-median capacity allocation, and 5-language UI (EN, TR, ZH, ES, ID).
+about=Accessibility Analysis is an all-in-one urban network accessibility and walkability toolkit for urban planners, GIS analysts, transport engineers, and researchers. Unlike simple circular buffers or centroid-only tools, it computes true street-network shortest paths (multi-source Dijkstra) with exact mid-edge splitting and connects residential blocks and buildings from their closest road-facing facade leading toward the target facility (schools, green spaces, hospitals, transit stations, emergency services). It automatically nodes intersecting streets, heals digitizing gaps and T-junction undershoots, and generates: (1) Prominent Blue Target Facility markers with capacity & demand statistics, (2) Colored Block/Building Accessibility Polygons and Points, (3) Clipped Service Area Street Networks at custom distance thresholds (e.g., 250m, 500m, 1000m), (4) Non-overlapping Walkability Isochrone Catchments, (5) Euclidean Benchmark Circles & Pedshed Walkability Ratios, and (6) Interactive HTML/Text Audit Reports with verified academic DOIs. Built-in runtime language switcher supports English, Turkish, Simplified Chinese, Spanish, and Indonesian. Full QGIS 3 & QGIS 4 (Qt5 & Qt6) compatibility.
+version=5.3.0
 author=Baran Adsuna
 email=baran.adsuna@ogr.deu.edu.tr
-changelog=5.2.0 - Renamed to Erişim Analizi (Accessibility Analysis) for universal urban facility evaluation (schools, parks, health, transit). Added closest-to-facility road-facing facade connection for residential blocks/buildings, colored block accessibility polygons, non-overlapping clean isochrones, reduced 18px dock snap threshold with float controls, new terracotta UI theme, and new icon.
-tags=accessibility, erisim analizi, school, green space, walkability, pedshed, network analysis, isochrone, p-median, urban planning, epsg5253
+changelog=5.3.0 - Standardized plugin title, metadata, and default startup interface to full English (Accessibility Analysis) with 5-language in-app selector (EN, TR, ZH, ES, ID). Added prominent large Blue Point symbology (#2563eb) for target facilities at the top of the output layer hierarchy. Full QGIS 3/4 and Qt5/Qt6 test suite verification.
+    5.2.0 - Added closest-to-facility road-facing facade connection for residential blocks/buildings, colored block accessibility polygons, non-overlapping clean isochrones, reduced 18px dock snap threshold with float controls, and terracotta UI theme.
+tags=accessibility, walkability, isochrone, network analysis, service area, 15-minute city, pedshed, urban planning, shortest path, dijkstra, school, green space, park, public transit, p-median, facility location, routing, gis, catchment, epsg5253
 homepage=https://baranadsuna.github.io/yesil_alan_erisimi
 tracker=https://github.com/baranadsuna/yesil_alan_erisimi/issues
 repository=https://github.com/baranadsuna/yesil_alan_erisimi
 category=Analysis
 icon=icon.png
+license=GPL-2.0-or-later
 experimental=False
 deprecated=False
